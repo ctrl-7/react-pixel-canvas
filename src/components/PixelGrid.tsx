@@ -5,8 +5,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Undo2, Redo2, Trash2, Download, ChevronDown } from 'lucide-react'
 import SettingsDialog from './SettingsDialog'
 import { exportOptions, type ExportTypes } from '@/util/export'
-import { DropdownMenu, DropdownMenuTrigger } from './ui/dropdown-menu'
-import { DropdownMenuContent, DropdownMenuItem } from '@radix-ui/react-dropdown-menu'
+import { DropdownMenuContent, DropdownMenuItem, DropdownMenu, DropdownMenuTrigger } from './ui/dropdown-menu'
 
 interface PixelGridProps {
   rows?: number
