@@ -2,9 +2,10 @@ import React, { useEffect, useReducer, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Undo2, Redo2, Trash2, Download } from 'lucide-react'
-import { toPng } from 'html-to-image'
+import { Undo2, Redo2, Trash2, Download, ChevronDown } from 'lucide-react'
 import SettingsDialog from './SettingsDialog'
+import { exportOptions, type ExportTypes } from '@/util/export'
+import { DropdownMenuContent, DropdownMenuItem, DropdownMenu, DropdownMenuTrigger } from './ui/dropdown-menu'
 
 interface PixelGridProps {
   rows?: number
@@ -121,14 +122,21 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
     dispatch({ type: 'PAINT', row, col, color: selectedColor })
   }
 
-  const handleExport = () => {
+  const handleExport = (format: ExportTypes) => {
     if (!gridRef.current) return
-    toPng(gridRef.current).then((dataUrl) => {
-      const link = document.createElement('a')
-      link.download = 'pixel-art.png'
-      link.href = dataUrl
-      link.click()
-    })
+
+    const exportOption = exportOptions.find((option) => option.format === format)
+    if (!exportOption) return
+
+    exportOption
+      .converter(gridRef.current)
+      .then((dataUrl) => {
+        const link = document.createElement('a')
+        link.download = `pixel-art.${exportOption.format}`
+        link.href = dataUrl
+        link.click()
+      })
+      .catch((err) => console.error('Export failed:', err))
   }
 
   return (
@@ -208,11 +216,23 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
       <div className="absolute bottom-4 right-4 flex gap-2 items-center">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="outline" onClick={handleExport}>
-              <Download />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  Export as
+                  <ChevronDown className="ml-1 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {exportOptions.map((option) => (
+                  <DropdownMenuItem key={option.format} onClick={() => handleExport(option.format as ExportTypes)}>
+                    {option.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </TooltipTrigger>
-          <TooltipContent>Export PNG</TooltipContent>
+          <TooltipContent>Export your pixel art</TooltipContent>
         </Tooltip>
 
         {/* Settings Alert Dialog */}
