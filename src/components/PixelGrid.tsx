@@ -1,6 +1,7 @@
-import React, { useReducer, useState } from 'react'
+import React, { useReducer, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
+import { toPng } from 'html-to-image'
 
 interface PixelGridProps {
   rows?: number
@@ -77,8 +78,22 @@ const PixelGrid: React.FC<PixelGridProps> = ({
     future: [],
   })
 
+  const gridRef = useRef<HTMLDivElement>(null)
+
   const handleCellClick = (row: number, col: number) => {
     dispatch({ type: 'PAINT', row, col, color: selectedColor })
+  }
+
+  const handleExport = () => {
+    if (gridRef.current === null) return
+    toPng(gridRef.current)
+      .then((dataUrl) => {
+        const link = document.createElement('a')
+        link.download = 'pixel-art.png'
+        link.href = dataUrl
+        link.click()
+      })
+      .catch((err) => console.error('Export failed:', err))
   }
 
   return (
@@ -87,7 +102,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({
       <ColorPicker color={selectedColor} onChange={setSelectedColor} />
 
       {/* Toolbar */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         <Button
           variant="outline"
           onClick={() => dispatch({ type: 'UNDO' })}
@@ -105,21 +120,24 @@ const PixelGrid: React.FC<PixelGridProps> = ({
         <Button variant="destructive" onClick={() => dispatch({ type: 'RESET' })}>
           Clear
         </Button>
+        <Button onClick={handleExport}>Export as PNG</Button>
       </div>
 
       {/* Pixel Grid */}
-      {state.present.map((row, rowIndex) => (
-        <div key={rowIndex} className="flex">
-          {row.map((color, colIndex) => (
-            <div
-              key={colIndex}
-              onClick={() => handleCellClick(rowIndex, colIndex)}
-              className="w-6 h-6 border border-gray-300 cursor-pointer transition-colors duration-200"
-              style={{ backgroundColor: color }}
-            />
-          ))}
-        </div>
-      ))}
+      <div ref={gridRef}>
+        {state.present.map((row, rowIndex) => (
+          <div key={rowIndex} className="flex">
+            {row.map((color, colIndex) => (
+              <div
+                key={colIndex}
+                onClick={() => handleCellClick(rowIndex, colIndex)}
+                className="w-6 h-6 border border-gray-300 cursor-pointer transition-colors duration-200"
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
