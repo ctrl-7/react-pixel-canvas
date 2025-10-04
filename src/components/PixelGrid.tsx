@@ -1,26 +1,84 @@
-import React, { useState } from 'react'
+import React, { useReducer, useState } from 'react'
 import ColorPicker from './ColorPicker'
+import { Button } from '@/components/ui/button'
 
 interface PixelGridProps {
   rows?: number
   cols?: number
 }
 
-const PixelGrid: React.FC<PixelGridProps> = ({ rows = 16, cols = 16 }) => {
-  // Track grid cells
-  const [grid, setGrid] = useState<string[][]>(
-    Array.from({ length: rows }, () => Array.from({ length: cols }, () => '#ffffff'))
-  )
+type GridState = {
+  past: string[][][]
+  present: string[][]
+  future: string[][][]
+}
 
-  // Track selected color
-  const [selectedColor, setSelectedColor] = useState<string>('#000000')
+type Action =
+  | { type: 'PAINT'; row: number; col: number; color: string }
+  | { type: 'UNDO' }
+  | { type: 'REDO' }
+  | { type: 'RESET' }
 
-  // Toggle cell color
+const GRID_SIZE_DEFAULT = 16
+
+const createEmptyGrid = (rows: number, cols: number) =>
+  Array.from({ length: rows }, () => Array.from({ length: cols }, () => '#ffffff'))
+
+const gridReducer = (state: GridState, action: Action): GridState => {
+  switch (action.type) {
+    case 'PAINT': {
+      const { row, col, color } = action
+      const newPresent = state.present.map((r, i) =>
+        r.map((cell, j) => (i === row && j === col ? color : cell))
+      )
+      return {
+        past: [...state.past, state.present],
+        present: newPresent,
+        future: [],
+      }
+    }
+    case 'UNDO': {
+      if (state.past.length === 0) return state
+      const previous = state.past[state.past.length - 1]
+      const newPast = state.past.slice(0, state.past.length - 1)
+      return {
+        past: newPast,
+        present: previous,
+        future: [state.present, ...state.future],
+      }
+    }
+    case 'REDO': {
+      if (state.future.length === 0) return state
+      const next = state.future[0]
+      const newFuture = state.future.slice(1)
+      return {
+        past: [...state.past, state.present],
+        present: next,
+        future: newFuture,
+      }
+    }
+    case 'RESET': {
+      const emptyGrid = createEmptyGrid(GRID_SIZE_DEFAULT, GRID_SIZE_DEFAULT)
+      return { past: [...state.past, state.present], present: emptyGrid, future: [] }
+    }
+    default:
+      return state
+  }
+}
+
+const PixelGrid: React.FC<PixelGridProps> = ({
+  rows = GRID_SIZE_DEFAULT,
+  cols = GRID_SIZE_DEFAULT,
+}) => {
+  const [selectedColor, setSelectedColor] = useState('#000000')
+  const [state, dispatch] = useReducer(gridReducer, {
+    past: [],
+    present: createEmptyGrid(rows, cols),
+    future: [],
+  })
+
   const handleCellClick = (row: number, col: number) => {
-    const newGrid = grid.map((r, i) =>
-      r.map((cell, j) => (i === row && j === col ? selectedColor : cell))
-    )
-    setGrid(newGrid)
+    dispatch({ type: 'PAINT', row, col, color: selectedColor })
   }
 
   return (
@@ -28,16 +86,37 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = 16, cols = 16 }) => {
       {/* Color Picker */}
       <ColorPicker color={selectedColor} onChange={setSelectedColor} />
 
+      {/* Toolbar */}
+      <div className="flex gap-2 mb-4">
+        <Button
+          variant="outline"
+          onClick={() => dispatch({ type: 'UNDO' })}
+          disabled={state.past.length === 0}
+        >
+          Undo
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => dispatch({ type: 'REDO' })}
+          disabled={state.future.length === 0}
+        >
+          Redo
+        </Button>
+        <Button variant="destructive" onClick={() => dispatch({ type: 'RESET' })}>
+          Clear
+        </Button>
+      </div>
+
       {/* Pixel Grid */}
-      {grid.map((row, rowIndex) => (
+      {state.present.map((row, rowIndex) => (
         <div key={rowIndex} className="flex">
           {row.map((color, colIndex) => (
             <div
               key={colIndex}
               onClick={() => handleCellClick(rowIndex, colIndex)}
-              className={`w-6 h-6 border border-gray-300 cursor-pointer transition-colors duration-200`}
+              className="w-6 h-6 border border-gray-300 cursor-pointer transition-colors duration-200"
               style={{ backgroundColor: color }}
-            ></div>
+            />
           ))}
         </div>
       ))}
