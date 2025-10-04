@@ -30,15 +30,46 @@ const createEmptyGrid = (rows: number, cols: number, color: string = '#ffffff') 
 
 const gridReducer = (state: GridState, action: Action): GridState => {
   switch (action.type) {
-    // ...existing cases
-    case 'RESET_WITH_SETTINGS': {
-      const { rows, cols, defaultColor } = action
+    case 'PAINT': {
+      const { row, col, color } = action
+      const newPresent = state.present.map((r, i) =>
+        r.map((c, j) => (i === row && j === col ? color : c))
+      )
+      return { past: [...state.past, state.present], present: newPresent, future: [] }
+    }
+    case 'UNDO': {
+      if (state.past.length === 0) return state
+      const previous = state.past[state.past.length - 1]
+      return {
+        past: state.past.slice(0, state.past.length - 1),
+        present: previous,
+        future: [state.present, ...state.future],
+      }
+    }
+    case 'REDO': {
+      if (state.future.length === 0) return state
+      const next = state.future[0]
+      return { past: [...state.past, state.present], present: next, future: state.future.slice(1) }
+    }
+    case 'RESET': {
       return {
         past: [...state.past, state.present],
-        present: createEmptyGrid(rows, cols, defaultColor),
+        present: createEmptyGrid(DEFAULT_GRID, DEFAULT_GRID),
         future: [],
       }
     }
+    case 'RESET_WITH_SETTINGS': {
+      const { rows, cols, defaultColor } = action
+      return {
+        past: [],
+        present: Array.from({ length: rows }, () =>
+          Array.from({ length: cols }, () => defaultColor)
+        ),
+        future: [],
+      }
+    }
+    default:
+      return state
   }
 }
 
