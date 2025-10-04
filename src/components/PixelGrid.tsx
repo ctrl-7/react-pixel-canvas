@@ -1,6 +1,7 @@
-import React, { useReducer, useRef, useState } from 'react'
+import React, { useEffect, useReducer, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -89,7 +90,23 @@ const PixelGrid: React.FC<PixelGridProps> = ({
     future: [],
   })
 
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('theme') === 'dark'
+  })
+
   const gridRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const root = window.document.documentElement
+    if (darkMode) {
+      root.classList.add('dark')
+      localStorage.setItem('theme', 'dark')
+    } else {
+      root.classList.remove('dark')
+      localStorage.setItem('theme', 'light')
+    }
+  }, [darkMode])
 
   const handleCellClick = (row: number, col: number) => {
     dispatch({ type: 'PAINT', row, col, color: selectedColor })
@@ -108,9 +125,9 @@ const PixelGrid: React.FC<PixelGridProps> = ({
   }
 
   return (
-    <Card className="inline-block p-4 bg-gray-50 shadow-lg">
+    <Card className="inline-block p-4 bg-gray-50 dark:bg-gray-800 shadow-lg">
       <CardHeader>
-        <h2 className="text-lg font-semibold">Pixel Art Grid</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Pixel Art Grid</h2>
       </CardHeader>
 
       <CardContent>
@@ -118,7 +135,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({
         <ColorPicker color={selectedColor} onChange={setSelectedColor} />
 
         {/* Toolbar */}
-        <div className="flex gap-2 mb-4 flex-wrap">
+        <div className="flex gap-2 mb-4 flex-wrap items-center">
           <Button
             variant="outline"
             onClick={() => dispatch({ type: 'UNDO' })}
@@ -156,17 +173,23 @@ const PixelGrid: React.FC<PixelGridProps> = ({
           </AlertDialog>
 
           <Button onClick={handleExport}>Export as PNG</Button>
+
+          {/* Dark/Light Mode Toggle */}
+          <div className="flex items-center gap-1 ml-auto">
+            <span className="text-gray-700 dark:text-gray-200 text-sm">Dark Mode</span>
+            <Switch checked={darkMode} onCheckedChange={setDarkMode} />
+          </div>
         </div>
 
         {/* Pixel Grid */}
-        <div ref={gridRef}>
+        <div ref={gridRef} className="bg-white dark:bg-gray-900 p-1 inline-block rounded">
           {state.present.map((row, rowIndex) => (
             <div key={rowIndex} className="flex">
               {row.map((color, colIndex) => (
                 <div
                   key={colIndex}
                   onClick={() => handleCellClick(rowIndex, colIndex)}
-                  className="w-6 h-6 border border-gray-300 cursor-pointer transition-colors duration-200"
+                  className="w-6 h-6 border border-gray-300 dark:border-gray-600 cursor-pointer transition-colors duration-200"
                   style={{ backgroundColor: color }}
                 />
               ))}
