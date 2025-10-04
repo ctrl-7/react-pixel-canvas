@@ -7,18 +7,15 @@ interface ColorPickerProps {
 
 const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange }) => {
   return (
-    <div className="flex items-center gap-2 mb-4">
-      <label htmlFor="colorPicker" className="font-medium">
-        Pick Color:
-      </label>
+    <div className="flex items-center gap-2 flex-col">
       <input
         type="color"
         id="colorPicker"
         value={color}
         onChange={(e) => onChange(e.target.value)}
-        className="w-10 h-10 cursor-pointer border border-gray-300 rounded"
+        className="size-10 cursor-pointer"
       />
-      <span className="text-sm">{color}</span>
+      <span className="text-sm">{color.toLocaleUpperCase()}</span>
     </div>
   )
 }
