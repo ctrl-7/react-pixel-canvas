@@ -1,6 +1,17 @@
 import React, { useReducer, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { toPng } from 'html-to-image'
 
 interface PixelGridProps {
@@ -85,7 +96,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({
   }
 
   const handleExport = () => {
-    if (gridRef.current === null) return
+    if (!gridRef.current) return
     toPng(gridRef.current)
       .then((dataUrl) => {
         const link = document.createElement('a')
@@ -97,48 +108,73 @@ const PixelGrid: React.FC<PixelGridProps> = ({
   }
 
   return (
-    <div className="inline-block p-4 bg-gray-100 rounded-lg shadow-md">
-      {/* Color Picker */}
-      <ColorPicker color={selectedColor} onChange={setSelectedColor} />
+    <Card className="inline-block p-4 bg-gray-50 shadow-lg">
+      <CardHeader>
+        <h2 className="text-lg font-semibold">Pixel Art Grid</h2>
+      </CardHeader>
 
-      {/* Toolbar */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <Button
-          variant="outline"
-          onClick={() => dispatch({ type: 'UNDO' })}
-          disabled={state.past.length === 0}
-        >
-          Undo
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => dispatch({ type: 'REDO' })}
-          disabled={state.future.length === 0}
-        >
-          Redo
-        </Button>
-        <Button variant="destructive" onClick={() => dispatch({ type: 'RESET' })}>
-          Clear
-        </Button>
-        <Button onClick={handleExport}>Export as PNG</Button>
-      </div>
+      <CardContent>
+        {/* Color Picker */}
+        <ColorPicker color={selectedColor} onChange={setSelectedColor} />
 
-      {/* Pixel Grid */}
-      <div ref={gridRef}>
-        {state.present.map((row, rowIndex) => (
-          <div key={rowIndex} className="flex">
-            {row.map((color, colIndex) => (
-              <div
-                key={colIndex}
-                onClick={() => handleCellClick(rowIndex, colIndex)}
-                className="w-6 h-6 border border-gray-300 cursor-pointer transition-colors duration-200"
-                style={{ backgroundColor: color }}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
+        {/* Toolbar */}
+        <div className="flex gap-2 mb-4 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => dispatch({ type: 'UNDO' })}
+            disabled={state.past.length === 0}
+          >
+            Undo
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => dispatch({ type: 'REDO' })}
+            disabled={state.future.length === 0}
+          >
+            Redo
+          </Button>
+
+          {/* Clear Canvas with confirmation */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive">Clear</Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear Canvas?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will reset the entire grid to white. You can undo if you change your mind.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="flex gap-2 justify-end mt-4">
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => dispatch({ type: 'RESET' })}>
+                  Confirm
+                </AlertDialogAction>
+              </div>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <Button onClick={handleExport}>Export as PNG</Button>
+        </div>
+
+        {/* Pixel Grid */}
+        <div ref={gridRef}>
+          {state.present.map((row, rowIndex) => (
+            <div key={rowIndex} className="flex">
+              {row.map((color, colIndex) => (
+                <div
+                  key={colIndex}
+                  onClick={() => handleCellClick(rowIndex, colIndex)}
+                  className="w-6 h-6 border border-gray-300 cursor-pointer transition-colors duration-200"
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
