@@ -234,7 +234,10 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 {exportOptions.map((option) => (
-                  <DropdownMenuItem key={option.format} onClick={() => handleExport(option.format as ExportTypes)}>
+                  <DropdownMenuItem
+                    key={option.format}
+                    onClick={() => handleExport(option.format as ExportTypes)}
+                  >
                     {option.label}
                   </DropdownMenuItem>
                 ))}
