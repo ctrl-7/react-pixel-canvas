@@ -165,8 +165,15 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
             <div
               key={`${i}-${j}`}
               onClick={() => handleCellClick(i, j)}
+              onMouseDown={() => handleCellClick(i, j)}
+              onMouseEnter={(e) => {
+                const LEFT_MOUSE = 1
+                if (e.buttons === LEFT_MOUSE) {
+                  handleCellClick(i, j)
+                }
+              }}
               style={{ backgroundColor: color, width: `${cellSize}px`, height: `${cellSize}px` }}
-              className="cursor-pointer transition-colors"
+              className="cursor-pointer transition-colors select-none"
             />
           ))
         )}
