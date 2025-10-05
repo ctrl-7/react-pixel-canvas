@@ -9,11 +9,13 @@ import {
   AlertDialogTrigger,
   AlertDialogFooter,
 } from '@/components/ui/alert-dialog'
-import { Sun, Moon, X as XIcon, Settings } from 'lucide-react'
+import { Sun, Moon, X as XIcon, Settings, EyeClosed, Eye } from 'lucide-react'
 
 interface SettingsDialogProps {
   darkMode: boolean
   toggleDarkMode: () => void
+  showGridLines: boolean
+  toggleGridLines: () => void
   gridRows: number
   setGridRows: (rows: number) => void
   gridCols: number
@@ -27,6 +29,8 @@ interface SettingsDialogProps {
 }
 
 const SettingsDialog: React.FC<SettingsDialogProps> = ({
+  showGridLines,
+  toggleGridLines,
   darkMode,
   toggleDarkMode,
   gridRows,
@@ -90,6 +94,14 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
             <span>Dark Mode</span>
             <Button onClick={toggleDarkMode}>
               {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+            </Button>
+          </div>
+
+          {/* Grid Lines Toggle */}
+          <div className="flex items-center justify-between">
+            <span>Grid Lines</span>
+            <Button onClick={toggleGridLines}>
+              {showGridLines ? <EyeClosed size={16} /> : <Eye size={16} />}
             </Button>
           </div>
 
