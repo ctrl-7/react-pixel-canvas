@@ -12,11 +12,14 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import clsx from 'clsx'
+import ColorTooltip from './ColorTooltip'
 
 interface PixelGridProps {
   rows?: number
   cols?: number
 }
+
+const TOOLTIP_OFFSET = 12
 
 type GridState = {
   past: string[][][]
@@ -98,6 +101,8 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
   const gridRef = useRef<HTMLDivElement>(null)
 
+  const [tooltip, setTooltip] = useState<{ color: string; x: number; y: number } | null>(null)
+
   useEffect(() => {
     dispatch({
       type: 'RESET_WITH_SETTINGS',
@@ -167,10 +172,18 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
               onClick={() => handleCellClick(i, j)}
               onMouseDown={() => handleCellClick(i, j)}
               onMouseEnter={(e) => {
+                setTooltip({ color, x: e.clientX + TOOLTIP_OFFSET, y: e.clientY + TOOLTIP_OFFSET })
+
                 const LEFT_MOUSE = 1
                 if (e.buttons === LEFT_MOUSE) {
                   handleCellClick(i, j)
                 }
+              }}
+              onMouseMove={(e) => {
+                setTooltip({ color, x: e.clientX + TOOLTIP_OFFSET, y: e.clientY + TOOLTIP_OFFSET })
+              }}
+              onMouseLeave={() => {
+                setTooltip(null)
               }}
               style={{ backgroundColor: color, width: `${cellSize}px`, height: `${cellSize}px` }}
               className="cursor-pointer transition-colors select-none"
@@ -178,6 +191,8 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           ))
         )}
       </div>
+
+      {tooltip && <ColorTooltip {...tooltip} />}
 
       {/* Bottom-Left Floating Toolbar */}
       <div className="absolute bottom-4 left-4 flex gap-2">
@@ -241,7 +256,10 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 {exportOptions.map((option) => (
-                  <DropdownMenuItem key={option.format} onClick={() => handleExport(option.format as ExportTypes)}>
+                  <DropdownMenuItem
+                    key={option.format}
+                    onClick={() => handleExport(option.format as ExportTypes)}
+                  >
                     {option.label}
                   </DropdownMenuItem>
                 ))}
