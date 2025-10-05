@@ -124,6 +124,38 @@ const PixelGrid: React.FC<PixelGridProps> = ({
       .catch((err) => console.error('Export failed:', err))
   }
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const triggerAction = (action: Function) => {
+        event.preventDefault()
+        action()
+      }
+
+      const modifierKeyPressed = event.ctrlKey || event.metaKey
+
+      if (modifierKeyPressed) {
+        // Ctrl/Cmd + Z = Undo
+        // Ctrl/Cmd + Shift + Z = Redo
+        if (event.key === 'z') {
+          if (event.shiftKey) triggerAction(() => dispatch({ type: 'REDO' }))
+          else triggerAction(() => dispatch({ type: 'UNDO' }))
+        }
+
+        // Ctrl/Cmd + Y = Redo
+        if (event.key === 'y') triggerAction(() => dispatch({ type: 'REDO' }))
+      } else {
+        // C = Reset
+        if (event.key === 'c') triggerAction(() => dispatch({ type: 'RESET' }))
+
+        // D = Toggle Dark Mode
+        if (event.key === 'd') triggerAction(() => setDarkMode((prev) => !prev))
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   return (
     <Card className="inline-block p-4 bg-gray-50 dark:bg-gray-800 shadow-lg">
       <CardHeader>
