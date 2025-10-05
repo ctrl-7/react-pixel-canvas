@@ -2,6 +2,7 @@ import React, { useEffect, useReducer, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import clsx from 'clsx'
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -84,6 +85,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({
   cols = GRID_SIZE_DEFAULT,
 }) => {
   const [selectedColor, setSelectedColor] = useState('#000000')
+  const [showGridLines, setShowGridLines] = useState(true)
   const [state, dispatch] = useReducer(gridReducer, {
     past: [],
     present: createEmptyGrid(rows, cols),
@@ -179,6 +181,10 @@ const PixelGrid: React.FC<PixelGridProps> = ({
             <span className="text-gray-700 dark:text-gray-200 text-sm">Dark Mode</span>
             <Switch checked={darkMode} onCheckedChange={setDarkMode} />
           </div>
+          <div className="flex items-center gap-1 ml-auto">
+            <span className="text-gray-700 dark:text-gray-200 text-sm">Show Grid Lines</span>
+            <Switch checked={showGridLines} onCheckedChange={setShowGridLines} />
+          </div>
         </div>
 
         {/* Pixel Grid */}
@@ -189,7 +195,12 @@ const PixelGrid: React.FC<PixelGridProps> = ({
                 <div
                   key={colIndex}
                   onClick={() => handleCellClick(rowIndex, colIndex)}
-                  className="w-6 h-6 border border-gray-300 dark:border-gray-600 cursor-pointer transition-colors duration-200"
+                  className={clsx(
+                    'w-6 h-6 border-gray-300 dark:border-gray-600 cursor-pointer transition-colors duration-200',
+                    {
+                      border: showGridLines,
+                    }
+                  )}
                   style={{ backgroundColor: color }}
                 />
               ))}
