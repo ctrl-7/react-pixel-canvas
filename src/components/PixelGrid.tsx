@@ -2,10 +2,16 @@ import React, { useEffect, useReducer, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Undo2, Redo2, Trash2, Download, ChevronDown } from 'lucide-react'
+import { Undo2, Redo2, Trash2, ChevronDown } from 'lucide-react'
 import SettingsDialog from './SettingsDialog'
 import { exportOptions, type ExportData, type ExportTypes } from '@/util/export'
-import { DropdownMenuContent, DropdownMenuItem, DropdownMenu, DropdownMenuTrigger } from './ui/dropdown-menu'
+import {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenu,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu'
+import clsx from 'clsx'
 
 interface PixelGridProps {
   rows?: number
@@ -81,6 +87,7 @@ const gridReducer = (state: GridState, action: Action): GridState => {
 const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAULT_GRID }) => {
   const [selectedColor, setSelectedColor] = useState('#000000')
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
+  const [showGridLines, setShowGridLines] = useState(true)
 
   const [gridRows, setGridRows] = useState(DEFAULT_GRID)
   const [gridCols, setGridCols] = useState(DEFAULT_GRID)
@@ -145,12 +152,46 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
       .catch((err) => console.error('Export failed:', err))
   }
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const triggerAction = (action: Function) => {
+        event.preventDefault()
+        action()
+      }
+
+      const modifierKeyPressed = event.ctrlKey || event.metaKey
+
+      if (modifierKeyPressed) {
+        // Ctrl/Cmd + Z = Undo
+        // Ctrl/Cmd + Shift + Z = Redo
+        if (event.key === 'z') {
+          if (event.shiftKey) triggerAction(() => dispatch({ type: 'REDO' }))
+          else triggerAction(() => dispatch({ type: 'UNDO' }))
+        }
+
+        // Ctrl/Cmd + Y = Redo
+        if (event.key === 'y') triggerAction(() => dispatch({ type: 'REDO' }))
+      } else {
+        // C = Reset
+        if (event.key === 'c') triggerAction(() => dispatch({ type: 'RESET' }))
+
+        // D = Toggle Dark Mode
+        if (event.key === 'd') triggerAction(() => setDarkMode((prev) => !prev))
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   return (
     <div className="bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
       {/* Pixel Grid */}
       <div
         ref={gridRef}
-        className="gap-[1px] bg-gray-300 dark:bg-gray-700"
+        className={clsx({
+          'bg-gray-300 dark:bg-gray-700 gap-[1px]': showGridLines,
+        })}
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${gridCols}, ${cellSize}px)`,
@@ -162,8 +203,15 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
             <div
               key={`${i}-${j}`}
               onClick={() => handleCellClick(i, j)}
+              onMouseDown={() => handleCellClick(i, j)}
+              onMouseEnter={(e) => {
+                const LEFT_MOUSE = 1
+                if (e.buttons === LEFT_MOUSE) {
+                  handleCellClick(i, j)
+                }
+              }}
               style={{ backgroundColor: color, width: `${cellSize}px`, height: `${cellSize}px` }}
-              className="cursor-pointer transition-colors"
+              className="cursor-pointer transition-colors select-none"
             />
           ))
         )}
@@ -231,7 +279,10 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 {exportOptions.map((option) => (
-                  <DropdownMenuItem key={option.format} onClick={() => handleExport(option.format as ExportTypes)}>
+                  <DropdownMenuItem
+                    key={option.format}
+                    onClick={() => handleExport(option.format as ExportTypes)}
+                  >
                     {option.label}
                   </DropdownMenuItem>
                 ))}
@@ -244,6 +295,8 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
         {/* Settings Alert Dialog */}
         <SettingsDialog
+          showGridLines={showGridLines}
+          toggleGridLines={() => setShowGridLines((p) => !p)}
           darkMode={darkMode}
           toggleDarkMode={() => setDarkMode(!darkMode)}
           gridRows={gridRows}
