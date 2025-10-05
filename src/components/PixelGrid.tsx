@@ -1,20 +1,11 @@
 import React, { useEffect, useReducer, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import clsx from 'clsx'
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from '@/components/ui/alert-dialog'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { toPng } from 'html-to-image'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Undo2, Redo2, Trash2, Download, ChevronDown } from 'lucide-react'
+import SettingsDialog from './SettingsDialog'
+import { exportOptions, type ExportTypes } from '@/util/export'
+import { DropdownMenuContent, DropdownMenuItem, DropdownMenu, DropdownMenuTrigger } from './ui/dropdown-menu'
 
 interface PixelGridProps {
   rows?: number
@@ -26,37 +17,32 @@ type GridState = {
   present: string[][]
   future: string[][][]
 }
-
 type Action =
   | { type: 'PAINT'; row: number; col: number; color: string }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'RESET' }
+  | { type: 'RESET_WITH_SETTINGS'; rows: number; cols: number; defaultColor: string }
 
-const GRID_SIZE_DEFAULT = 16
+const DEFAULT_GRID = 16
 
-const createEmptyGrid = (rows: number, cols: number) =>
-  Array.from({ length: rows }, () => Array.from({ length: cols }, () => '#ffffff'))
+const createEmptyGrid = (rows: number, cols: number, color: string = '#ffffff') =>
+  Array.from({ length: rows }, () => Array.from({ length: cols }, () => color))
 
 const gridReducer = (state: GridState, action: Action): GridState => {
   switch (action.type) {
     case 'PAINT': {
       const { row, col, color } = action
       const newPresent = state.present.map((r, i) =>
-        r.map((cell, j) => (i === row && j === col ? color : cell))
+        r.map((c, j) => (i === row && j === col ? color : c))
       )
-      return {
-        past: [...state.past, state.present],
-        present: newPresent,
-        future: [],
-      }
+      return { past: [...state.past, state.present], present: newPresent, future: [] }
     }
     case 'UNDO': {
       if (state.past.length === 0) return state
       const previous = state.past[state.past.length - 1]
-      const newPast = state.past.slice(0, state.past.length - 1)
       return {
-        past: newPast,
+        past: state.past.slice(0, state.past.length - 1),
         present: previous,
         future: [state.present, ...state.future],
       }
@@ -64,41 +50,57 @@ const gridReducer = (state: GridState, action: Action): GridState => {
     case 'REDO': {
       if (state.future.length === 0) return state
       const next = state.future[0]
-      const newFuture = state.future.slice(1)
-      return {
-        past: [...state.past, state.present],
-        present: next,
-        future: newFuture,
-      }
+      return { past: [...state.past, state.present], present: next, future: state.future.slice(1) }
     }
     case 'RESET': {
-      const emptyGrid = createEmptyGrid(GRID_SIZE_DEFAULT, GRID_SIZE_DEFAULT)
-      return { past: [...state.past, state.present], present: emptyGrid, future: [] }
+      return {
+        past: [...state.past, state.present],
+        present: createEmptyGrid(DEFAULT_GRID, DEFAULT_GRID),
+        future: [],
+      }
+    }
+    case 'RESET_WITH_SETTINGS': {
+      const { rows, cols, defaultColor } = action
+      return {
+        past: [],
+        present: Array.from({ length: rows }, () =>
+          Array.from({ length: cols }, () => defaultColor)
+        ),
+        future: [],
+      }
     }
     default:
       return state
   }
 }
 
-const PixelGrid: React.FC<PixelGridProps> = ({
-  rows = GRID_SIZE_DEFAULT,
-  cols = GRID_SIZE_DEFAULT,
-}) => {
+const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAULT_GRID }) => {
   const [selectedColor, setSelectedColor] = useState('#000000')
-  const [showGridLines, setShowGridLines] = useState(true)
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
+
+  const [gridRows, setGridRows] = useState(DEFAULT_GRID)
+  const [gridCols, setGridCols] = useState(DEFAULT_GRID)
+  const [cellSize, setCellSize] = useState(32)
+  const [defaultCellColor, setDefaultCellColor] = useState('#ffffff')
+
   const [state, dispatch] = useReducer(gridReducer, {
     past: [],
-    present: createEmptyGrid(rows, cols),
+    present: createEmptyGrid(gridRows, gridCols, defaultCellColor),
     future: [],
-  })
-
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem('theme') === 'dark'
   })
 
   const gridRef = useRef<HTMLDivElement>(null)
 
+  useEffect(() => {
+    dispatch({
+      type: 'RESET_WITH_SETTINGS',
+      rows: gridRows,
+      cols: gridCols,
+      defaultColor: defaultCellColor,
+    })
+  }, [gridRows, gridCols, defaultCellColor])
+
+  // Persist dark mode
   useEffect(() => {
     const root = window.document.documentElement
     if (darkMode) {
@@ -110,16 +112,27 @@ const PixelGrid: React.FC<PixelGridProps> = ({
     }
   }, [darkMode])
 
+  // Persist other settings
+  useEffect(() => {
+    const settings = { selectedColor }
+    localStorage.setItem('pixelgrid-settings', JSON.stringify(settings))
+  }, [selectedColor])
+
   const handleCellClick = (row: number, col: number) => {
     dispatch({ type: 'PAINT', row, col, color: selectedColor })
   }
 
-  const handleExport = () => {
+  const handleExport = (format: ExportTypes) => {
     if (!gridRef.current) return
-    toPng(gridRef.current)
+
+    const exportOption = exportOptions.find((option) => option.format === format)
+    if (!exportOption) return
+
+    exportOption
+      .converter(gridRef.current)
       .then((dataUrl) => {
         const link = document.createElement('a')
-        link.download = 'pixel-art.png'
+        link.download = `pixel-art.${exportOption.format}`
         link.href = dataUrl
         link.click()
       })
@@ -127,88 +140,118 @@ const PixelGrid: React.FC<PixelGridProps> = ({
   }
 
   return (
-    <Card className="inline-block p-4 bg-gray-50 dark:bg-gray-800 shadow-lg">
-      <CardHeader>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Pixel Art Grid</h2>
-      </CardHeader>
+    <div className="bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      {/* Pixel Grid */}
+      <div
+        ref={gridRef}
+        className="gap-[1px] bg-gray-300 dark:bg-gray-700"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${gridCols}, ${cellSize}px)`,
+          gridTemplateRows: `repeat(${gridRows}, ${cellSize}px)`,
+        }}
+      >
+        {state.present.map((row, i) =>
+          row.map((color, j) => (
+            <div
+              key={`${i}-${j}`}
+              onClick={() => handleCellClick(i, j)}
+              style={{ backgroundColor: color, width: `${cellSize}px`, height: `${cellSize}px` }}
+              className="cursor-pointer transition-colors"
+            />
+          ))
+        )}
+      </div>
 
-      <CardContent>
-        {/* Color Picker */}
-        <ColorPicker color={selectedColor} onChange={setSelectedColor} />
+      {/* Bottom-Left Floating Toolbar */}
+      <div className="absolute bottom-4 left-4 flex gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              onClick={() => dispatch({ type: 'UNDO' })}
+              disabled={state.past.length === 0}
+            >
+              <Undo2 />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Undo</TooltipContent>
+        </Tooltip>
 
-        {/* Toolbar */}
-        <div className="flex gap-2 mb-4 flex-wrap items-center">
-          <Button
-            variant="outline"
-            onClick={() => dispatch({ type: 'UNDO' })}
-            disabled={state.past.length === 0}
-          >
-            Undo
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => dispatch({ type: 'REDO' })}
-            disabled={state.future.length === 0}
-          >
-            Redo
-          </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              onClick={() => dispatch({ type: 'REDO' })}
+              disabled={state.future.length === 0}
+            >
+              <Redo2 />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Redo</TooltipContent>
+        </Tooltip>
 
-          {/* Clear Canvas with confirmation */}
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive">Clear</Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Clear Canvas?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will reset the entire grid to white. You can undo if you change your mind.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="flex gap-2 justify-end mt-4">
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => dispatch({ type: 'RESET' })}>
-                  Confirm
-                </AlertDialogAction>
-              </div>
-            </AlertDialogContent>
-          </AlertDialog>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" onClick={() => dispatch({ type: 'RESET' })}>
+              <Trash2 />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Clear Canvas</TooltipContent>
+        </Tooltip>
+      </div>
 
-          <Button onClick={handleExport}>Export as PNG</Button>
+      {/* Bottom-Center Floating Color Picker */}
 
-          {/* Dark/Light Mode Toggle */}
-          <div className="flex items-center gap-1 ml-auto">
-            <span className="text-gray-700 dark:text-gray-200 text-sm">Dark Mode</span>
-            <Switch checked={darkMode} onCheckedChange={setDarkMode} />
-          </div>
-          <div className="flex items-center gap-1 ml-auto">
-            <span className="text-gray-700 dark:text-gray-200 text-sm">Show Grid Lines</span>
-            <Switch checked={showGridLines} onCheckedChange={setShowGridLines} />
-          </div>
-        </div>
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ColorPicker color={selectedColor} onChange={setSelectedColor} />
+          </TooltipTrigger>
+          <TooltipContent>Selected Color</TooltipContent>
+        </Tooltip>
+      </div>
 
-        {/* Pixel Grid */}
-        <div ref={gridRef} className="bg-white dark:bg-gray-900 p-1 inline-block rounded">
-          {state.present.map((row, rowIndex) => (
-            <div key={rowIndex} className="flex">
-              {row.map((color, colIndex) => (
-                <div
-                  key={colIndex}
-                  onClick={() => handleCellClick(rowIndex, colIndex)}
-                  className={clsx(
-                    'w-6 h-6 border-gray-300 dark:border-gray-600 cursor-pointer transition-colors duration-200',
-                    {
-                      border: showGridLines,
-                    }
-                  )}
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+      {/* Bottom-Right Floating Export and Settings */}
+      <div className="absolute bottom-4 right-4 flex gap-2 items-center">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  Export as
+                  <ChevronDown className="ml-1 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {exportOptions.map((option) => (
+                  <DropdownMenuItem key={option.format} onClick={() => handleExport(option.format as ExportTypes)}>
+                    {option.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </TooltipTrigger>
+          <TooltipContent>Export your pixel art</TooltipContent>
+        </Tooltip>
+
+        {/* Settings Alert Dialog */}
+        <SettingsDialog
+          darkMode={darkMode}
+          toggleDarkMode={() => setDarkMode(!darkMode)}
+          gridRows={gridRows}
+          setGridRows={setGridRows}
+          gridCols={gridCols}
+          setGridCols={setGridCols}
+          cellSize={cellSize}
+          setCellSize={setCellSize}
+          defaultCellColor={defaultCellColor}
+          setDefaultCellColor={setDefaultCellColor}
+          selectedColor={selectedColor}
+          setSelectedColor={setSelectedColor}
+        />
+      </div>
+    </div>
   )
 }
 
