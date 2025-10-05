@@ -2,10 +2,16 @@ import React, { useEffect, useReducer, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Undo2, Redo2, Trash2, Download, ChevronDown } from 'lucide-react'
+import { Undo2, Redo2, Trash2, ChevronDown } from 'lucide-react'
 import SettingsDialog from './SettingsDialog'
 import { exportOptions, type ExportTypes } from '@/util/export'
-import { DropdownMenuContent, DropdownMenuItem, DropdownMenu, DropdownMenuTrigger } from './ui/dropdown-menu'
+import {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenu,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu'
+import clsx from 'clsx'
 
 interface PixelGridProps {
   rows?: number
@@ -77,6 +83,7 @@ const gridReducer = (state: GridState, action: Action): GridState => {
 const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAULT_GRID }) => {
   const [selectedColor, setSelectedColor] = useState('#000000')
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
+  const [showGridLines, setShowGridLines] = useState(true)
 
   const [gridRows, setGridRows] = useState(DEFAULT_GRID)
   const [gridCols, setGridCols] = useState(DEFAULT_GRID)
@@ -144,7 +151,9 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
       {/* Pixel Grid */}
       <div
         ref={gridRef}
-        className="gap-[1px] bg-gray-300 dark:bg-gray-700"
+        className={clsx({
+          'bg-gray-300 dark:bg-gray-700 gap-[1px]': showGridLines,
+        })}
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${gridCols}, ${cellSize}px)`,
@@ -237,6 +246,8 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
         {/* Settings Alert Dialog */}
         <SettingsDialog
+          showGridLines={showGridLines}
+          toggleGridLines={() => setShowGridLines((p) => !p)}
           darkMode={darkMode}
           toggleDarkMode={() => setDarkMode(!darkMode)}
           gridRows={gridRows}
