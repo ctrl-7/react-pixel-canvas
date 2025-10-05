@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
   AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogDescription,
   AlertDialogTrigger,
-  AlertDialogFooter,
 } from '@/components/ui/alert-dialog'
-import { Sun, Moon, X as XIcon, Settings } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Moon, Settings, Sun, Upload, X as XIcon } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import type { Action, GridState } from './PixelGrid'
 
 interface SettingsDialogProps {
   darkMode: boolean
@@ -24,6 +25,7 @@ interface SettingsDialogProps {
   setDefaultCellColor: (color: string) => void
   selectedColor: string
   setSelectedColor: (color: string) => void
+  dispatch: React.Dispatch<Action>
 }
 
 const SettingsDialog: React.FC<SettingsDialogProps> = ({
@@ -39,6 +41,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   setDefaultCellColor,
   selectedColor,
   setSelectedColor,
+  dispatch,
 }) => {
   const [open, setOpen] = useState(false)
 
@@ -67,6 +70,30 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
     }
     localStorage.setItem('pixelgrid-settings', JSON.stringify(settings))
   }, [gridRows, gridCols, cellSize, defaultCellColor, selectedColor, darkMode])
+
+  const handleLoadJSON = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0]
+      if (!file) return
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const jsonString = e.target?.result as string
+          const gridState = JSON.parse(jsonString) as GridState
+          dispatch({ type: 'LOAD_STATE', state: gridState })
+        } catch (error) {
+          console.error('Failed to load JSON:', error)
+          alert('Invalid JSON file format')
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
@@ -155,6 +182,15 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 className="w-20 h-10 border rounded"
               />
             </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span>Load from JSON</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleLoadJSON}>
+              <Upload />
+            </Button>
           </div>
         </div>
 

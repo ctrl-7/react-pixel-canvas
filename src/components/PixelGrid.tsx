@@ -2,11 +2,10 @@ import React, { useEffect, useReducer, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Undo2, Redo2, Trash2, Download, ChevronDown, Save, Upload } from 'lucide-react'
+import { Undo2, Redo2, Trash2, Download, ChevronDown } from 'lucide-react'
 import SettingsDialog from './SettingsDialog'
-import { exportOptions, type ExportTypes } from '@/util/export'
+import { exportOptions, type ExportData, type ExportTypes } from '@/util/export'
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenu, DropdownMenuTrigger } from './ui/dropdown-menu'
-import { serializerDeserializer } from '@/util/serializer'
 
 interface PixelGridProps {
   rows?: number
@@ -18,7 +17,7 @@ export type GridState = {
   present: string[][]
   future: string[][][]
 }
-type Action =
+export type Action =
   | { type: 'PAINT'; row: number; col: number; color: string }
   | { type: 'UNDO' }
   | { type: 'REDO' }
@@ -133,8 +132,10 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
     const exportOption = exportOptions.find((option) => option.format === format)
     if (!exportOption) return
 
+    const passedData = (format === 'json') ? state : gridRef.current;
+
     exportOption
-      .converter(gridRef.current)
+      .converter(passedData as ExportData)
       .then((dataUrl) => {
         const link = document.createElement('a')
         link.download = `pixel-art.${exportOption.format}`
@@ -142,41 +143,6 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
         link.click()
       })
       .catch((err) => console.error('Export failed:', err))
-  }
-
-  const handleSaveJSON = () => {
-    const jsonString = serializerDeserializer.getJSONFromGridState(state)
-    const blob = new Blob([jsonString], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'pixel-grid-state.json'
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const handleLoadJSON = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.json'
-    input.onchange = (event) => {
-      const file = (event.target as HTMLInputElement).files?.[0]
-      if (!file) return
-
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const jsonString = e.target?.result as string
-          const gridState = JSON.parse(jsonString) as GridState
-          dispatch({ type: 'LOAD_STATE', state: gridState })
-        } catch (error) {
-          console.error('Failed to load JSON:', error)
-          alert('Invalid JSON file format')
-        }
-      }
-      reader.readAsText(file)
-    }
-    input.click()
   }
 
   return (
@@ -275,23 +241,6 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           <TooltipContent>Export your pixel art</TooltipContent>
         </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" onClick={handleSaveJSON}>
-              <Save />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Save as JSON</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" onClick={handleLoadJSON}>
-              <Upload />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Load from JSON</TooltipContent>
-        </Tooltip>
 
         {/* Settings Alert Dialog */}
         <SettingsDialog
@@ -307,6 +256,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           setDefaultCellColor={setDefaultCellColor}
           selectedColor={selectedColor}
           setSelectedColor={setSelectedColor}
+          dispatch={dispatch}
         />
       </div>
     </div>
