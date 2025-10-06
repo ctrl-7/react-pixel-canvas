@@ -18,7 +18,7 @@ interface PixelGridProps {
   cols?: number
 }
 
-type ToolMode = 'paint' | 'eraser' | 'custom-eraser'
+type ToolMode = 'paint' | 'eraser'
 
 type GridState = {
   past: string[][][]
@@ -87,7 +87,6 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
   const [showGridLines, setShowGridLines] = useState(true)
   const [toolMode, setToolMode] = useState<ToolMode>('paint')
-  const [eraserColor, setEraserColor] = useState('#ffffff')
 
   const [gridRows, setGridRows] = useState(rows)
   const [gridCols, setGridCols] = useState(cols)
@@ -125,23 +124,18 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
   // Persist other settings
   useEffect(() => {
-    const settings = { selectedColor, toolMode, eraserColor }
+    const settings = { selectedColor, toolMode }
     localStorage.setItem('pixelgrid-settings', JSON.stringify(settings))
-  }, [selectedColor, toolMode, eraserColor])
+  }, [selectedColor, toolMode])
 
   // Load persisted settings
   useEffect(() => {
     const savedSettings = localStorage.getItem('pixelgrid-settings')
     if (savedSettings) {
       try {
-        const {
-          selectedColor: savedColor,
-          toolMode: savedTool,
-          eraserColor: savedEraserColor,
-        } = JSON.parse(savedSettings)
+        const { selectedColor: savedColor, toolMode: savedTool } = JSON.parse(savedSettings)
         if (savedColor) setSelectedColor(savedColor)
         if (savedTool) setToolMode(savedTool)
-        if (savedEraserColor) setEraserColor(savedEraserColor)
       } catch (e) {
         console.warn('Failed to load saved settings:', e)
       }
@@ -156,10 +150,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
         colorToUse = selectedColor
         break
       case 'eraser':
-        colorToUse = '#ffffff' // Always white for standard eraser
-        break
-      case 'custom-eraser':
-        colorToUse = eraserColor
+        colorToUse = defaultCellColor // Use default background color
         break
       default:
         colorToUse = selectedColor
@@ -216,9 +207,6 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
         // E = Eraser mode
         if (event.key === 'e') triggerAction(() => setToolMode('eraser'))
-
-        // R = Custom eraser mode
-        if (event.key === 'r') triggerAction(() => setToolMode('custom-eraser'))
       }
     }
 
@@ -256,7 +244,6 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
               className={clsx('transition-colors select-none', {
                 'cursor-crosshair': toolMode === 'paint',
                 'cursor-eraser': toolMode === 'eraser',
-                'cursor-custom-eraser': toolMode === 'custom-eraser',
               })}
             />
           ))
@@ -290,25 +277,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
                 <Eraser className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Eraser Mode - White (E)</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={toolMode === 'custom-eraser' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setToolMode('custom-eraser')}
-                className="relative"
-              >
-                <Eraser className="h-4 w-4" />
-                <div
-                  className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border border-gray-300 dark:border-gray-600"
-                  style={{ backgroundColor: eraserColor }}
-                />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Custom Color Eraser (R)</TooltipContent>
+            <TooltipContent>Eraser Mode - Default Color (E)</TooltipContent>
           </Tooltip>
         </div>
 
@@ -373,26 +342,14 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg">
             <div className="text-xs text-gray-600 dark:text-gray-300 mb-2 text-center">Eraser</div>
             <div className="flex items-center gap-2 flex-col">
-              <div className="size-10 bg-white border-2 border-gray-300 dark:border-gray-600 rounded cursor-not-allowed flex items-center justify-center">
+              <div
+                className="size-10 border-2 border-gray-300 dark:border-gray-600 rounded cursor-not-allowed flex items-center justify-center"
+                style={{ backgroundColor: defaultCellColor }}
+              >
                 <Eraser className="h-4 w-4 text-gray-600" />
               </div>
-              <span className="text-sm">#FFFFFF</span>
+              <span className="text-sm">{defaultCellColor.toUpperCase()}</span>
             </div>
-          </div>
-        )}
-
-        {/* Custom Eraser Color */}
-        {toolMode === 'custom-eraser' && (
-          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg">
-            <div className="text-xs text-gray-600 dark:text-gray-300 mb-2 text-center">
-              Eraser Color
-            </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <ColorPicker color={eraserColor} onChange={setEraserColor} />
-              </TooltipTrigger>
-              <TooltipContent>Custom Eraser Color</TooltipContent>
-            </Tooltip>
           </div>
         )}
       </div>
