@@ -2,7 +2,7 @@ import React, { useEffect, useReducer, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Undo2, Redo2, Trash2, ChevronDown } from 'lucide-react'
+import { Undo2, Redo2, Trash2, ChevronDown, Paintbrush, Eraser } from 'lucide-react'
 import SettingsDialog from './SettingsDialog'
 import { exportOptions, type ExportTypes } from '@/util/export'
 import {
@@ -17,6 +17,8 @@ interface PixelGridProps {
   rows?: number
   cols?: number
 }
+
+type ToolMode = 'paint' | 'eraser'
 
 type GridState = {
   past: string[][][]
@@ -84,9 +86,10 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
   const [selectedColor, setSelectedColor] = useState('#000000')
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
   const [showGridLines, setShowGridLines] = useState(true)
+  const [toolMode, setToolMode] = useState<ToolMode>('paint')
 
-  const [gridRows, setGridRows] = useState(DEFAULT_GRID)
-  const [gridCols, setGridCols] = useState(DEFAULT_GRID)
+  const [gridRows, setGridRows] = useState(rows)
+  const [gridCols, setGridCols] = useState(cols)
   const [cellSize, setCellSize] = useState(32)
   const [defaultCellColor, setDefaultCellColor] = useState('#ffffff')
 
@@ -121,12 +124,39 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
   // Persist other settings
   useEffect(() => {
-    const settings = { selectedColor }
+    const settings = { selectedColor, toolMode }
     localStorage.setItem('pixelgrid-settings', JSON.stringify(settings))
-  }, [selectedColor])
+  }, [selectedColor, toolMode])
+
+  // Load persisted settings
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('pixelgrid-settings')
+    if (savedSettings) {
+      try {
+        const { selectedColor: savedColor, toolMode: savedTool } = JSON.parse(savedSettings)
+        if (savedColor) setSelectedColor(savedColor)
+        if (savedTool) setToolMode(savedTool)
+      } catch (e) {
+        console.warn('Failed to load saved settings:', e)
+      }
+    }
+  }, [])
 
   const handleCellClick = (row: number, col: number) => {
-    dispatch({ type: 'PAINT', row, col, color: selectedColor })
+    let colorToUse: string
+
+    switch (toolMode) {
+      case 'paint':
+        colorToUse = selectedColor
+        break
+      case 'eraser':
+        colorToUse = defaultCellColor // Use default background color
+        break
+      default:
+        colorToUse = selectedColor
+    }
+
+    dispatch({ type: 'PAINT', row, col, color: colorToUse })
   }
 
   const handleExport = (format: ExportTypes) => {
@@ -171,6 +201,12 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
         // D = Toggle Dark Mode
         if (event.key === 'd') triggerAction(() => setDarkMode((prev) => !prev))
+
+        // P = Paint mode
+        if (event.key === 'p') triggerAction(() => setToolMode('paint'))
+
+        // E = Eraser mode
+        if (event.key === 'e') triggerAction(() => setToolMode('eraser'))
       }
     }
 
@@ -205,59 +241,117 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
                 }
               }}
               style={{ backgroundColor: color, width: `${cellSize}px`, height: `${cellSize}px` }}
-              className="cursor-pointer transition-colors select-none"
+              className={clsx('transition-colors select-none', {
+                'cursor-crosshair': toolMode === 'paint',
+                'cursor-eraser': toolMode === 'eraser',
+              })}
             />
           ))
         )}
       </div>
 
       {/* Bottom-Left Floating Toolbar */}
-      <div className="absolute bottom-4 left-4 flex gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              onClick={() => dispatch({ type: 'UNDO' })}
-              disabled={state.past.length === 0}
-            >
-              <Undo2 />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Undo</TooltipContent>
-        </Tooltip>
+      <div className="absolute bottom-4 left-4 flex gap-2 flex-col">
+        {/* Tool Selection */}
+        <div className="flex gap-2 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={toolMode === 'paint' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setToolMode('paint')}
+              >
+                <Paintbrush className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Paint Mode (P)</TooltipContent>
+          </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              onClick={() => dispatch({ type: 'REDO' })}
-              disabled={state.future.length === 0}
-            >
-              <Redo2 />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Redo</TooltipContent>
-        </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={toolMode === 'eraser' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setToolMode('eraser')}
+              >
+                <Eraser className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Eraser Mode - Default Color (E)</TooltipContent>
+          </Tooltip>
+        </div>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" onClick={() => dispatch({ type: 'RESET' })}>
-              <Trash2 />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Clear Canvas</TooltipContent>
-        </Tooltip>
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                onClick={() => dispatch({ type: 'UNDO' })}
+                disabled={state.past.length === 0}
+              >
+                <Undo2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Undo (Ctrl+Z)</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                onClick={() => dispatch({ type: 'REDO' })}
+                disabled={state.future.length === 0}
+              >
+                <Redo2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Redo (Ctrl+Y)</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" onClick={() => dispatch({ type: 'RESET' })}>
+                <Trash2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Clear Canvas (C)</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {/* Bottom-Center Floating Color Picker */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-4">
+        {/* Paint Color */}
+        {toolMode === 'paint' && (
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg">
+            <div className="text-xs text-gray-600 dark:text-gray-300 mb-2 text-center">
+              Paint Color
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ColorPicker color={selectedColor} onChange={setSelectedColor} />
+              </TooltipTrigger>
+              <TooltipContent>Paint Color</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
 
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <ColorPicker color={selectedColor} onChange={setSelectedColor} />
-          </TooltipTrigger>
-          <TooltipContent>Selected Color</TooltipContent>
-        </Tooltip>
+        {/* Eraser Color */}
+        {toolMode === 'eraser' && (
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg">
+            <div className="text-xs text-gray-600 dark:text-gray-300 mb-2 text-center">Eraser</div>
+            <div className="flex items-center gap-2 flex-col">
+              <div
+                className="size-10 border-2 border-gray-300 dark:border-gray-600 rounded cursor-not-allowed flex items-center justify-center"
+                style={{ backgroundColor: defaultCellColor }}
+              >
+                <Eraser className="h-4 w-4 text-gray-600" />
+              </div>
+              <span className="text-sm">{defaultCellColor.toUpperCase()}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bottom-Right Floating Export and Settings */}
