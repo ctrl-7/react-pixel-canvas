@@ -87,6 +87,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
   const [showGridLines, setShowGridLines] = useState(true)
   const [toolMode, setToolMode] = useState<ToolMode>('paint')
+  const [isEyedropperActive, setIsEyedropperActive] = useState(false)
 
   const [gridRows, setGridRows] = useState(rows)
   const [gridCols, setGridCols] = useState(cols)
@@ -143,6 +144,13 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
   }, [])
 
   const handleCellClick = (row: number, col: number) => {
+    // If eyedropper is active, sample the color instead of painting
+    if (isEyedropperActive) {
+      const sampledColor = state.present[row][col]
+      setSelectedColor(sampledColor)
+      return
+    }
+
     let colorToUse: string
 
     switch (toolMode) {
@@ -207,15 +215,47 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
         // E = Eraser mode
         if (event.key === 'e') triggerAction(() => setToolMode('eraser'))
+
+        // I = Eyedropper mode (temporary activation)
+        if (event.key === 'i') {
+          event.preventDefault()
+          setIsEyedropperActive(true)
+        }
+      }
+    }
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      // Deactivate eyedropper when I key is released
+      if (event.key === 'i') {
+        setIsEyedropperActive(false)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
   }, [])
+
+  // Get cursor class based on current state
+  const getCursorClass = () => {
+    if (isEyedropperActive) return 'cursor-eyedropper'
+    if (toolMode === 'paint') return 'cursor-crosshair'
+    if (toolMode === 'eraser') return 'cursor-eraser'
+    return 'cursor-crosshair'
+  }
 
   return (
     <div className="bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      {/* Eyedropper tooltip overlay */}
+      {isEyedropperActive && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-3 py-1 rounded-md text-sm z-10">
+          Click a pixel to sample its color
+        </div>
+      )}
+
       {/* Pixel Grid */}
       <div
         ref={gridRef}
@@ -236,15 +276,12 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
               onMouseDown={() => handleCellClick(i, j)}
               onMouseEnter={(e) => {
                 const LEFT_MOUSE = 1
-                if (e.buttons === LEFT_MOUSE) {
+                if (e.buttons === LEFT_MOUSE && !isEyedropperActive) {
                   handleCellClick(i, j)
                 }
               }}
               style={{ backgroundColor: color, width: `${cellSize}px`, height: `${cellSize}px` }}
-              className={clsx('transition-colors select-none', {
-                'cursor-crosshair': toolMode === 'paint',
-                'cursor-eraser': toolMode === 'eraser',
-              })}
+              className={clsx('transition-colors select-none', getCursorClass())}
             />
           ))
         )}
@@ -279,6 +316,14 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
             </TooltipTrigger>
             <TooltipContent>Eraser Mode - Default Color (E)</TooltipContent>
           </Tooltip>
+        </div>
+
+        {/* Eyedropper Info */}
+        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg">
+          <div className="text-xs text-gray-600 dark:text-gray-300 text-center">
+            Hold <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">I</kbd>{' '}
+            to sample colors
+          </div>
         </div>
 
         {/* Action Buttons */}
