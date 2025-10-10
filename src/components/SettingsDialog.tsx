@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -10,67 +10,23 @@ import {
   AlertDialogFooter,
 } from '@/components/ui/alert-dialog'
 import { Sun, Moon, X as XIcon, Settings, EyeClosed, Eye } from 'lucide-react'
+import { useCanvasStore } from '@/store/canvasStore'
+import { useThemeStore } from '@/store/themeStore'
 
-interface SettingsDialogProps {
-  darkMode: boolean
-  toggleDarkMode: () => void
-  showGridLines: boolean
-  toggleGridLines: () => void
-  gridRows: number
-  setGridRows: (rows: number) => void
-  gridCols: number
-  setGridCols: (cols: number) => void
-  cellSize: number
-  setCellSize: (size: number) => void
-  defaultCellColor: string
-  setDefaultCellColor: (color: string) => void
-  selectedColor: string
-  setSelectedColor: (color: string) => void
-}
-
-const SettingsDialog: React.FC<SettingsDialogProps> = ({
-  showGridLines,
-  toggleGridLines,
-  darkMode,
-  toggleDarkMode,
-  gridRows,
-  setGridRows,
-  gridCols,
-  setGridCols,
-  cellSize,
-  setCellSize,
-  defaultCellColor,
-  setDefaultCellColor,
-  selectedColor,
-  setSelectedColor,
-}) => {
+const SettingsDialog: React.FC = () => {
   const [open, setOpen] = useState(false)
 
-  // Load saved settings from localStorage on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('pixelgrid-settings')
-    if (saved) {
-      const data = JSON.parse(saved)
-      if (data.gridRows) setGridRows(data.gridRows)
-      if (data.gridCols) setGridCols(data.gridCols)
-      if (data.cellSize) setCellSize(data.cellSize)
-      if (data.defaultCellColor) setDefaultCellColor(data.defaultCellColor)
-      if (data.selectedColor) setSelectedColor(data.selectedColor)
-    }
-  }, [])
+  // Zustand stores
+  const settings = useCanvasStore((state) => state.settings)
+  const setGridRows = useCanvasStore((state) => state.setGridRows)
+  const setGridCols = useCanvasStore((state) => state.setGridCols)
+  const setCellSize = useCanvasStore((state) => state.setCellSize)
+  const setDefaultCellColor = useCanvasStore((state) => state.setDefaultCellColor)
+  const setSelectedColor = useCanvasStore((state) => state.setSelectedColor)
+  const toggleGridLines = useCanvasStore((state) => state.toggleGridLines)
 
-  // Save settings to localStorage whenever they change
-  useEffect(() => {
-    const settings = {
-      gridRows,
-      gridCols,
-      cellSize,
-      defaultCellColor,
-      selectedColor,
-      darkMode,
-    }
-    localStorage.setItem('pixelgrid-settings', JSON.stringify(settings))
-  }, [gridRows, gridCols, cellSize, defaultCellColor, selectedColor, darkMode])
+  const theme = useThemeStore((state) => state.theme)
+  const toggleTheme = useThemeStore((state) => state.toggleTheme)
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
@@ -92,8 +48,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
           {/* Dark Mode Toggle */}
           <div className="flex items-center justify-between">
             <span>Dark Mode</span>
-            <Button onClick={toggleDarkMode}>
-              {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+            <Button onClick={toggleTheme}>
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </Button>
           </div>
 
@@ -101,7 +57,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
           <div className="flex items-center justify-between">
             <span>Grid Lines</span>
             <Button onClick={toggleGridLines}>
-              {showGridLines ? <EyeClosed size={16} /> : <Eye size={16} />}
+              {settings.showGridLines ? <EyeClosed size={16} /> : <Eye size={16} />}
             </Button>
           </div>
 
@@ -111,7 +67,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
             <input
               type="number"
               min={1}
-              value={gridRows}
+              value={settings.gridRows}
               onChange={(e) => setGridRows(Number(e.target.value))}
               className="border rounded px-2 py-1 w-20 dark:bg-gray-800 dark:text-white"
             />
@@ -123,7 +79,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
             <input
               type="number"
               min={1}
-              value={gridCols}
+              value={settings.gridCols}
               onChange={(e) => setGridCols(Number(e.target.value))}
               className="border rounded px-2 py-1 w-20 dark:bg-gray-800 dark:text-white"
             />
@@ -135,7 +91,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
             <input
               type="number"
               min={4}
-              value={cellSize}
+              value={settings.cellSize}
               onChange={(e) => setCellSize(Number(e.target.value))}
               className="border rounded px-2 py-1 w-20 dark:bg-gray-800 dark:text-white"
             />
@@ -145,10 +101,10 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
           <div className="flex items-center justify-between">
             <span>Default Cell Color</span>
             <div className="flex items-center gap-2">
-              <span>{defaultCellColor.toLocaleUpperCase()}</span>
+              <span>{settings.defaultCellColor.toLocaleUpperCase()}</span>
               <input
                 type="color"
-                value={defaultCellColor}
+                value={settings.defaultCellColor}
                 onChange={(e) => setDefaultCellColor(e.target.value)}
                 className="w-20 h-10 border rounded"
               />
@@ -159,10 +115,10 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
           <div className="flex items-center justify-between">
             <span>Selected Color</span>
             <div className="flex items-center gap-2">
-              <span>{selectedColor.toLocaleUpperCase()}</span>
+              <span>{settings.selectedColor.toLocaleUpperCase()}</span>
               <input
                 type="color"
-                value={selectedColor}
+                value={settings.selectedColor}
                 onChange={(e) => setSelectedColor(e.target.value)}
                 className="w-20 h-10 border rounded"
               />
