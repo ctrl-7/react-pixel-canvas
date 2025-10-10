@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -12,121 +12,36 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import clsx from 'clsx'
+import { useCanvasStore } from '@/store/canvasStore'
+import { useThemeStore } from '@/store/themeStore'
 
 interface PixelGridProps {
   rows?: number
   cols?: number
 }
 
-type GridState = {
-  past: string[][][]
-  present: string[][]
-  future: string[][][]
-}
-type Action =
-  | { type: 'PAINT'; row: number; col: number; color: string }
-  | { type: 'UNDO' }
-  | { type: 'REDO' }
-  | { type: 'RESET' }
-  | { type: 'RESET_WITH_SETTINGS'; rows: number; cols: number; defaultColor: string }
+const PixelGrid: React.FC<PixelGridProps> = () => {
+  // Zustand stores
+  const grid = useCanvasStore((state) => state.grid)
+  const settings = useCanvasStore((state) => state.settings)
+  const paintCell = useCanvasStore((state) => state.paintCell)
+  const undo = useCanvasStore((state) => state.undo)
+  const redo = useCanvasStore((state) => state.redo)
+  const resetGrid = useCanvasStore((state) => state.resetGrid)
+  const resetGridWithSettings = useCanvasStore((state) => state.resetGridWithSettings)
+  const setSelectedColor = useCanvasStore((state) => state.setSelectedColor)
 
-const DEFAULT_GRID = 16
-
-const createEmptyGrid = (rows: number, cols: number, color: string = '#ffffff') =>
-  Array.from({ length: rows }, () => Array.from({ length: cols }, () => color))
-
-const gridReducer = (state: GridState, action: Action): GridState => {
-  switch (action.type) {
-    case 'PAINT': {
-      const { row, col, color } = action
-      const newPresent = state.present.map((r, i) =>
-        r.map((c, j) => (i === row && j === col ? color : c))
-      )
-      return { past: [...state.past, state.present], present: newPresent, future: [] }
-    }
-    case 'UNDO': {
-      if (state.past.length === 0) return state
-      const previous = state.past[state.past.length - 1]
-      return {
-        past: state.past.slice(0, state.past.length - 1),
-        present: previous,
-        future: [state.present, ...state.future],
-      }
-    }
-    case 'REDO': {
-      if (state.future.length === 0) return state
-      const next = state.future[0]
-      return { past: [...state.past, state.present], present: next, future: state.future.slice(1) }
-    }
-    case 'RESET': {
-      return {
-        past: [...state.past, state.present],
-        present: createEmptyGrid(DEFAULT_GRID, DEFAULT_GRID),
-        future: [],
-      }
-    }
-    case 'RESET_WITH_SETTINGS': {
-      const { rows, cols, defaultColor } = action
-      return {
-        past: [],
-        present: Array.from({ length: rows }, () =>
-          Array.from({ length: cols }, () => defaultColor)
-        ),
-        future: [],
-      }
-    }
-    default:
-      return state
-  }
-}
-
-const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAULT_GRID }) => {
-  const [selectedColor, setSelectedColor] = useState('#000000')
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
-  const [showGridLines, setShowGridLines] = useState(true)
-
-  const [gridRows, setGridRows] = useState(DEFAULT_GRID)
-  const [gridCols, setGridCols] = useState(DEFAULT_GRID)
-  const [cellSize, setCellSize] = useState(32)
-  const [defaultCellColor, setDefaultCellColor] = useState('#ffffff')
-
-  const [state, dispatch] = useReducer(gridReducer, {
-    past: [],
-    present: createEmptyGrid(gridRows, gridCols, defaultCellColor),
-    future: [],
-  })
+  const toggleTheme = useThemeStore((state) => state.toggleTheme)
 
   const gridRef = useRef<HTMLDivElement>(null)
 
+  // Reset grid when settings change
   useEffect(() => {
-    dispatch({
-      type: 'RESET_WITH_SETTINGS',
-      rows: gridRows,
-      cols: gridCols,
-      defaultColor: defaultCellColor,
-    })
-  }, [gridRows, gridCols, defaultCellColor])
-
-  // Persist dark mode
-  useEffect(() => {
-    const root = window.document.documentElement
-    if (darkMode) {
-      root.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-    } else {
-      root.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-    }
-  }, [darkMode])
-
-  // Persist other settings
-  useEffect(() => {
-    const settings = { selectedColor }
-    localStorage.setItem('pixelgrid-settings', JSON.stringify(settings))
-  }, [selectedColor])
+    resetGridWithSettings(settings.gridRows, settings.gridCols, settings.defaultCellColor)
+  }, [settings.gridRows, settings.gridCols, settings.defaultCellColor, resetGridWithSettings])
 
   const handleCellClick = (row: number, col: number) => {
-    dispatch({ type: 'PAINT', row, col, color: selectedColor })
+    paintCell(row, col, settings.selectedColor)
   }
 
   const handleExport = (format: ExportTypes) => {
@@ -148,7 +63,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const triggerAction = (action: Function) => {
+      const triggerAction = (action: () => void) => {
         event.preventDefault()
         action()
       }
@@ -159,24 +74,24 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
         // Ctrl/Cmd + Z = Undo
         // Ctrl/Cmd + Shift + Z = Redo
         if (event.key === 'z') {
-          if (event.shiftKey) triggerAction(() => dispatch({ type: 'REDO' }))
-          else triggerAction(() => dispatch({ type: 'UNDO' }))
+          if (event.shiftKey) triggerAction(() => redo())
+          else triggerAction(() => undo())
         }
 
         // Ctrl/Cmd + Y = Redo
-        if (event.key === 'y') triggerAction(() => dispatch({ type: 'REDO' }))
+        if (event.key === 'y') triggerAction(() => redo())
       } else {
         // C = Reset
-        if (event.key === 'c') triggerAction(() => dispatch({ type: 'RESET' }))
+        if (event.key === 'c') triggerAction(() => resetGrid())
 
         // D = Toggle Dark Mode
-        if (event.key === 'd') triggerAction(() => setDarkMode((prev) => !prev))
+        if (event.key === 'd') triggerAction(() => toggleTheme())
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [undo, redo, resetGrid, toggleTheme])
 
   return (
     <div className="bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -184,15 +99,15 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
       <div
         ref={gridRef}
         className={clsx({
-          'bg-gray-300 dark:bg-gray-700 gap-[1px]': showGridLines,
+          'bg-gray-300 dark:bg-gray-700 gap-[1px]': settings.showGridLines,
         })}
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${gridCols}, ${cellSize}px)`,
-          gridTemplateRows: `repeat(${gridRows}, ${cellSize}px)`,
+          gridTemplateColumns: `repeat(${settings.gridCols}, ${settings.cellSize}px)`,
+          gridTemplateRows: `repeat(${settings.gridRows}, ${settings.cellSize}px)`,
         }}
       >
-        {state.present.map((row, i) =>
+        {grid.present.map((row, i) =>
           row.map((color, j) => (
             <div
               key={`${i}-${j}`}
@@ -204,7 +119,11 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
                   handleCellClick(i, j)
                 }
               }}
-              style={{ backgroundColor: color, width: `${cellSize}px`, height: `${cellSize}px` }}
+              style={{
+                backgroundColor: color,
+                width: `${settings.cellSize}px`,
+                height: `${settings.cellSize}px`,
+              }}
               className="cursor-pointer transition-colors select-none"
             />
           ))
@@ -215,11 +134,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
       <div className="absolute bottom-4 left-4 flex gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              onClick={() => dispatch({ type: 'UNDO' })}
-              disabled={state.past.length === 0}
-            >
+            <Button variant="outline" onClick={() => undo()} disabled={grid.past.length === 0}>
               <Undo2 />
             </Button>
           </TooltipTrigger>
@@ -228,11 +143,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              onClick={() => dispatch({ type: 'REDO' })}
-              disabled={state.future.length === 0}
-            >
+            <Button variant="outline" onClick={() => redo()} disabled={grid.future.length === 0}>
               <Redo2 />
             </Button>
           </TooltipTrigger>
@@ -241,7 +152,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="outline" onClick={() => dispatch({ type: 'RESET' })}>
+            <Button variant="outline" onClick={() => resetGrid()}>
               <Trash2 />
             </Button>
           </TooltipTrigger>
@@ -254,7 +165,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
         <Tooltip>
           <TooltipTrigger asChild>
-            <ColorPicker color={selectedColor} onChange={setSelectedColor} />
+            <ColorPicker color={settings.selectedColor} onChange={setSelectedColor} />
           </TooltipTrigger>
           <TooltipContent>Selected Color</TooltipContent>
         </Tooltip>
@@ -287,22 +198,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
         </Tooltip>
 
         {/* Settings Alert Dialog */}
-        <SettingsDialog
-          showGridLines={showGridLines}
-          toggleGridLines={() => setShowGridLines((p) => !p)}
-          darkMode={darkMode}
-          toggleDarkMode={() => setDarkMode(!darkMode)}
-          gridRows={gridRows}
-          setGridRows={setGridRows}
-          gridCols={gridCols}
-          setGridCols={setGridCols}
-          cellSize={cellSize}
-          setCellSize={setCellSize}
-          defaultCellColor={defaultCellColor}
-          setDefaultCellColor={setDefaultCellColor}
-          selectedColor={selectedColor}
-          setSelectedColor={setSelectedColor}
-        />
+        <SettingsDialog />
       </div>
     </div>
   )
