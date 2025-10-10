@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Undo2, Redo2, Trash2, ChevronDown } from 'lucide-react'
+import { Undo2, Redo2, Trash2, ChevronDown, Paintbrush, Eraser } from 'lucide-react'
 import SettingsDialog from './SettingsDialog'
 import { exportOptions, type ExportTypes } from '@/util/export'
 import {
@@ -161,6 +161,21 @@ const PixelGrid: React.FC<PixelGridProps> = () => {
       </div>
 
       {/* Bottom-Center Floating Color Picker */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-4">
+        {/* Paint Color */}
+        {toolMode === 'paint' && (
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg">
+            <div className="text-xs text-gray-600 dark:text-gray-300 mb-2 text-center">
+              Paint Color
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ColorPicker color={selectedColor} onChange={setSelectedColor} />
+              </TooltipTrigger>
+              <TooltipContent>Paint Color</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
 
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
         <Tooltip>
