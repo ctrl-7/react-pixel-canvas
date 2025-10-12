@@ -29,8 +29,10 @@ type Action =
   | { type: 'PAINT'; row: number; col: number; color: string }
   | { type: 'UNDO' }
   | { type: 'REDO' }
-  | { type: 'RESET' }
+  | { type: 'RESET'; rows: number; cols: number; defaultColor: string }
   | { type: 'RESET_WITH_SETTINGS'; rows: number; cols: number; defaultColor: string }
+  | { type: 'UPDATE_DEFAULT_COLOR'; oldColor: string; newColor: string }
+  | { type: 'RESIZE_CANVAS'; rows: number; cols: number; defaultColor: string }
 
 const DEFAULT_GRID = 16
 
@@ -61,9 +63,10 @@ const gridReducer = (state: GridState, action: Action): GridState => {
       return { past: [...state.past, state.present], present: next, future: state.future.slice(1) }
     }
     case 'RESET': {
+      const { rows, cols, defaultColor } = action
       return {
         past: [...state.past, state.present],
-        present: createEmptyGrid(DEFAULT_GRID, DEFAULT_GRID),
+        present: createEmptyGrid(rows, cols, defaultColor),
         future: [],
       }
     }
@@ -74,6 +77,41 @@ const gridReducer = (state: GridState, action: Action): GridState => {
         present: Array.from({ length: rows }, () =>
           Array.from({ length: cols }, () => defaultColor)
         ),
+        future: [],
+      }
+    }
+    case 'UPDATE_DEFAULT_COLOR': {
+      const { oldColor, newColor } = action
+      // Only update cells that have the old default color, preserve user-drawn pixels
+      const newPresent = state.present.map((row) =>
+        row.map((cell) => (cell === oldColor ? newColor : cell))
+      )
+      return {
+        past: [...state.past, state.present],
+        present: newPresent,
+        future: [],
+      }
+    }
+    case 'RESIZE_CANVAS': {
+      const { rows, cols, defaultColor } = action
+      const currentRows = state.present.length
+      const currentCols = state.present[0]?.length || 0
+
+      // Create new grid with proper size
+      const newPresent = Array.from({ length: rows }, (_, i) =>
+        Array.from({ length: cols }, (_, j) => {
+          // If the cell exists in the current grid, preserve it
+          if (i < currentRows && j < currentCols) {
+            return state.present[i][j]
+          }
+          // Otherwise, fill with default color
+          return defaultColor
+        })
+      )
+
+      return {
+        past: [...state.past, state.present],
+        present: newPresent,
         future: [],
       }
     }
@@ -101,14 +139,38 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
   })
 
   const gridRef = useRef<HTMLDivElement>(null)
+  const prevDefaultColorRef = useRef(defaultCellColor)
+  const prevGridSizeRef = useRef({ rows: gridRows, cols: gridCols })
 
   useEffect(() => {
-    dispatch({
-      type: 'RESET_WITH_SETTINGS',
-      rows: gridRows,
-      cols: gridCols,
-      defaultColor: defaultCellColor,
-    })
+    const prevSize = prevGridSizeRef.current
+    const prevColor = prevDefaultColorRef.current
+
+    // Check if grid dimensions changed
+    const sizeChanged = gridRows !== prevSize.rows || gridCols !== prevSize.cols
+    // Check if only default color changed
+    const colorOnlyChanged = !sizeChanged && defaultCellColor !== prevColor
+
+    if (sizeChanged) {
+      // Resize canvas, preserving existing content
+      dispatch({
+        type: 'RESIZE_CANVAS',
+        rows: gridRows,
+        cols: gridCols,
+        defaultColor: defaultCellColor,
+      })
+      prevGridSizeRef.current = { rows: gridRows, cols: gridCols }
+    } else if (colorOnlyChanged) {
+      // Only update default color, preserve user drawings
+      dispatch({
+        type: 'UPDATE_DEFAULT_COLOR',
+        oldColor: prevColor,
+        newColor: defaultCellColor,
+      })
+    }
+
+    // Update refs for next comparison
+    prevDefaultColorRef.current = defaultCellColor
   }, [gridRows, gridCols, defaultCellColor])
 
   // Persist dark mode
@@ -205,7 +267,15 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
         if (event.key === 'y') triggerAction(() => dispatch({ type: 'REDO' }))
       } else {
         // C = Reset
-        if (event.key === 'c') triggerAction(() => dispatch({ type: 'RESET' }))
+        if (event.key === 'c')
+          triggerAction(() =>
+            dispatch({
+              type: 'RESET',
+              rows: gridRows,
+              cols: gridCols,
+              defaultColor: defaultCellColor,
+            })
+          )
 
         // D = Toggle Dark Mode
         if (event.key === 'd') triggerAction(() => setDarkMode((prev) => !prev))
@@ -356,7 +426,17 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" onClick={() => dispatch({ type: 'RESET' })}>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  dispatch({
+                    type: 'RESET',
+                    rows: gridRows,
+                    cols: gridCols,
+                    defaultColor: defaultCellColor,
+                  })
+                }
+              >
                 <Trash2 />
               </Button>
             </TooltipTrigger>
