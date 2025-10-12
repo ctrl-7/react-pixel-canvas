@@ -1,5 +1,5 @@
-import React from "react";
-import PixelGrid from "@/components/PixelGrid";
+import React from 'react'
+import PixelGrid from '@/components/PixelGrid'
 
 const Home: React.FC = () => {
   return (
@@ -7,7 +7,7 @@ const Home: React.FC = () => {
       <h1 className="text-3xl font-bold">React Pixel Canvas</h1>
       <PixelGrid />
     </div>
-  );
-};
+  )
+}
 
-export default Home;
+export default Home

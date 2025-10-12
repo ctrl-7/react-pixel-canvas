@@ -12,5 +12,5 @@ export const exportOptions = [
     converter: toSvg,
     format: 'svg',
     label: 'SVG Vector',
-  }
+  },
 ]
