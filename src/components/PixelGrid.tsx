@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Undo2, Redo2, Trash2, ChevronDown, Paintbrush, Eraser } from 'lucide-react'
 import SettingsDialog from './SettingsDialog'
-import { exportOptions, type ExportTypes } from '@/util/export'
+import { exportOptions, type ExportData, type ExportTypes } from '@/util/export'
 import {
   DropdownMenuContent,
   DropdownMenuItem,
@@ -20,17 +20,18 @@ interface PixelGridProps {
 
 type ToolMode = 'paint' | 'eraser'
 
-type GridState = {
+export type GridState = {
   past: string[][][]
   present: string[][]
   future: string[][][]
 }
-type Action =
+export type Action =
   | { type: 'PAINT'; row: number; col: number; color: string }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'RESET' }
   | { type: 'RESET_WITH_SETTINGS'; rows: number; cols: number; defaultColor: string }
+  | { type: 'LOAD_STATE'; state: GridState }
 
 const DEFAULT_GRID = 16
 
@@ -76,6 +77,9 @@ const gridReducer = (state: GridState, action: Action): GridState => {
         ),
         future: [],
       }
+    }
+    case 'LOAD_STATE': {
+      return action.state
     }
     default:
       return state
@@ -165,8 +169,10 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
     const exportOption = exportOptions.find((option) => option.format === format)
     if (!exportOption) return
 
+    const passedData = (format === 'json') ? state : gridRef.current;
+
     exportOption
-      .converter(gridRef.current)
+      .converter(passedData as ExportData)
       .then((dataUrl) => {
         const link = document.createElement('a')
         link.download = `pixel-art.${exportOption.format}`
@@ -380,6 +386,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           <TooltipContent>Export your pixel art</TooltipContent>
         </Tooltip>
 
+
         {/* Settings Alert Dialog */}
         <SettingsDialog
           showGridLines={showGridLines}
@@ -396,6 +403,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           setDefaultCellColor={setDefaultCellColor}
           selectedColor={selectedColor}
           setSelectedColor={setSelectedColor}
+          dispatch={dispatch}
         />
       </div>
     </div>
