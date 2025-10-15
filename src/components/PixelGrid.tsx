@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Undo2, Redo2, Trash2, ChevronDown, Paintbrush, Eraser } from 'lucide-react'
 import SettingsDialog from './SettingsDialog'
-import { exportOptions, type ExportTypes } from '@/util/export'
+import { exportOptions, type ExportData, type ExportTypes } from '@/util/export'
 import {
   DropdownMenuContent,
   DropdownMenuItem,
@@ -12,25 +12,28 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import clsx from 'clsx'
+import ColorTooltip from './ColorTooltip'
 
 interface PixelGridProps {
   rows?: number
   cols?: number
 }
 
+const TOOLTIP_OFFSET = 12
 type ToolMode = 'paint' | 'eraser'
 
-type GridState = {
+export type GridState = {
   past: string[][][]
   present: string[][]
   future: string[][][]
 }
-type Action =
+export type Action =
   | { type: 'PAINT'; row: number; col: number; color: string }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'RESET' }
   | { type: 'RESET_WITH_SETTINGS'; rows: number; cols: number; defaultColor: string }
+  | { type: 'LOAD_STATE'; state: GridState }
 
 const DEFAULT_GRID = 16
 
@@ -77,10 +80,26 @@ const gridReducer = (state: GridState, action: Action): GridState => {
         future: [],
       }
     }
+    case 'LOAD_STATE': {
+      return action.state
+    }
     default:
       return state
   }
 }
+
+const DEFAULT_PRESET_COLORS = [
+  '#000000', // Black
+  '#FFFFFF', // White
+  '#FF0000', // Red
+  '#00FF00', // Green
+  '#0000FF', // Blue
+  '#FFFF00', // Yellow
+  '#FF00FF', // Magenta
+  '#00FFFF', // Cyan
+  '#FFA500', // Orange
+  '#800080', // Purple
+]
 
 const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAULT_GRID }) => {
   const [selectedColor, setSelectedColor] = useState('#000000')
@@ -94,6 +113,12 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
   const [cellSize, setCellSize] = useState(32)
   const [defaultCellColor, setDefaultCellColor] = useState('#ffffff')
 
+  const [presetColors, setPresetColors] = useState<string[]>(() => {
+    const saved = localStorage.getItem('preset-colors')
+    return saved ? JSON.parse(saved) : DEFAULT_PRESET_COLORS
+  })
+  const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | null>(null)
+
   const [state, dispatch] = useReducer(gridReducer, {
     past: [],
     present: createEmptyGrid(gridRows, gridCols, defaultCellColor),
@@ -101,6 +126,8 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
   })
 
   const gridRef = useRef<HTMLDivElement>(null)
+
+  const [tooltip, setTooltip] = useState<{ color: string; x: number; y: number } | null>(null)
 
   useEffect(() => {
     dispatch({
@@ -128,6 +155,11 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
     const settings = { selectedColor, toolMode }
     localStorage.setItem('pixelgrid-settings', JSON.stringify(settings))
   }, [selectedColor, toolMode])
+
+  // Save preset colors to localStorage
+  useEffect(() => {
+    localStorage.setItem('preset-colors', JSON.stringify(presetColors))
+  }, [presetColors])
 
   // Load persisted settings
   useEffect(() => {
@@ -167,14 +199,32 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
     dispatch({ type: 'PAINT', row, col, color: colorToUse })
   }
 
+  const handlePresetClick = (presetColor: string, index: number) => {
+    setSelectedColor(presetColor)
+    setSelectedPresetIndex(index)
+  }
+
+  const handleColorPickerChange = (newColor: string) => {
+    setSelectedColor(newColor)
+
+    // If a preset was selected, update that preset slot
+    if (selectedPresetIndex !== null) {
+      const updatedPresets = [...presetColors]
+      updatedPresets[selectedPresetIndex] = newColor
+      setPresetColors(updatedPresets)
+    }
+  }
+
   const handleExport = (format: ExportTypes) => {
     if (!gridRef.current) return
 
     const exportOption = exportOptions.find((option) => option.format === format)
     if (!exportOption) return
 
+    const passedData = (format === 'json') ? state : gridRef.current;
+
     exportOption
-      .converter(gridRef.current)
+      .converter(passedData as ExportData)
       .then((dataUrl) => {
         const link = document.createElement('a')
         link.download = `pixel-art.${exportOption.format}`
@@ -275,10 +325,18 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
               onClick={() => handleCellClick(i, j)}
               onMouseDown={() => handleCellClick(i, j)}
               onMouseEnter={(e) => {
+                setTooltip({ color, x: e.clientX + TOOLTIP_OFFSET, y: e.clientY + TOOLTIP_OFFSET })
+
                 const LEFT_MOUSE = 1
                 if (e.buttons === LEFT_MOUSE && !isEyedropperActive) {
                   handleCellClick(i, j)
                 }
+              }}
+              onMouseMove={(e) => {
+                setTooltip({ color, x: e.clientX + TOOLTIP_OFFSET, y: e.clientY + TOOLTIP_OFFSET })
+              }}
+              onMouseLeave={() => {
+                setTooltip(null)
               }}
               style={{ backgroundColor: color, width: `${cellSize}px`, height: `${cellSize}px` }}
               className={clsx('transition-colors select-none', getCursorClass())}
@@ -286,6 +344,8 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           ))
         )}
       </div>
+
+      {tooltip && <ColorTooltip {...tooltip} />}
 
       {/* Bottom-Left Floating Toolbar */}
       <div className="absolute bottom-4 left-4 flex gap-2 flex-col">
@@ -323,6 +383,29 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           <div className="text-xs text-gray-600 dark:text-gray-300 text-center">
             Hold <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">I</kbd>{' '}
             to sample colors
+        {/* Preset Colors Palette */}
+        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg">
+          <div className="grid grid-cols-5 gap-1.5">
+            {presetColors.map((presetColor, index) => (
+              <Tooltip key={index}>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => handlePresetClick(presetColor, index)}
+                    className="size-6 rounded border-2 transition-all hover:scale-110 active:scale-95"
+                    style={{
+                      backgroundColor: presetColor,
+                      borderColor: selectedPresetIndex === index ? '#3b82f6' : '#9ca3af',
+                      boxShadow:
+                        selectedPresetIndex === index
+                          ? '0 0 0 2px rgba(59, 130, 246, 0.3)'
+                          : 'none',
+                    }}
+                    aria-label={`Select color ${presetColor}`}
+                  />
+                </TooltipTrigger>
+                <TooltipContent>{presetColor.toUpperCase()}</TooltipContent>
+              </Tooltip>
+            ))}
           </div>
         </div>
 
@@ -373,12 +456,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
             <div className="text-xs text-gray-600 dark:text-gray-300 mb-2 text-center">
               Paint Color
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <ColorPicker color={selectedColor} onChange={setSelectedColor} />
-              </TooltipTrigger>
-              <TooltipContent>Paint Color</TooltipContent>
-            </Tooltip>
+            <ColorPicker color={selectedColor} onChange={handleColorPickerChange} />
           </div>
         )}
 
@@ -425,6 +503,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           <TooltipContent>Export your pixel art</TooltipContent>
         </Tooltip>
 
+
         {/* Settings Alert Dialog */}
         <SettingsDialog
           showGridLines={showGridLines}
@@ -441,6 +520,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           setDefaultCellColor={setDefaultCellColor}
           selectedColor={selectedColor}
           setSelectedColor={setSelectedColor}
+          dispatch={dispatch}
         />
       </div>
     </div>
