@@ -221,7 +221,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
     const exportOption = exportOptions.find((option) => option.format === format)
     if (!exportOption) return
 
-    const passedData = (format === 'json') ? state : gridRef.current;
+    const passedData = format === 'json' ? state : gridRef.current
 
     exportOption
       .converter(passedData as ExportData)
@@ -383,6 +383,8 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           <div className="text-xs text-gray-600 dark:text-gray-300 text-center">
             Hold <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">I</kbd>{' '}
             to sample colors
+          </div>
+        </div>
         {/* Preset Colors Palette */}
         <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg">
           <div className="grid grid-cols-5 gap-1.5">
@@ -502,7 +504,6 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           </TooltipTrigger>
           <TooltipContent>Export your pixel art</TooltipContent>
         </Tooltip>
-
 
         {/* Settings Alert Dialog */}
         <SettingsDialog
