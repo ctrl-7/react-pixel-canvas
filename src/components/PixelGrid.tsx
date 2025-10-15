@@ -1,10 +1,10 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import ColorPicker from './ColorPicker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Undo2, Redo2, Trash2, ChevronDown } from 'lucide-react'
+import { Undo2, Redo2, Trash2, ChevronDown, Paintbrush, Eraser } from 'lucide-react'
 import SettingsDialog from './SettingsDialog'
-import { exportOptions, type ExportTypes } from '@/util/export'
+import { exportOptions, type ExportData, type ExportTypes } from '@/util/export'
 import {
   DropdownMenuContent,
   DropdownMenuItem,
@@ -14,11 +14,28 @@ import {
 import clsx from 'clsx'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useThemeStore } from '@/store/themeStore'
+import ColorTooltip from './ColorTooltip'
 
 interface PixelGridProps {
   rows?: number
   cols?: number
 }
+
+const TOOLTIP_OFFSET = 12
+type ToolMode = 'paint' | 'eraser'
+
+const DEFAULT_PRESET_COLORS = [
+  '#000000', // Black
+  '#FFFFFF', // White
+  '#FF0000', // Red
+  '#00FF00', // Green
+  '#0000FF', // Blue
+  '#FFFF00', // Yellow
+  '#FF00FF', // Magenta
+  '#00FFFF', // Cyan
+  '#FFA500', // Orange
+  '#800080', // Purple
+]
 
 const PixelGrid: React.FC<PixelGridProps> = () => {
   // Zustand stores
@@ -33,15 +50,85 @@ const PixelGrid: React.FC<PixelGridProps> = () => {
 
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
 
+  // Local UI state (not persisted in Zustand)
+  const [toolMode, setToolMode] = useState<ToolMode>('paint')
+  const [isEyedropperActive, setIsEyedropperActive] = useState(false)
+  const [presetColors, setPresetColors] = useState<string[]>(() => {
+    const saved = localStorage.getItem('preset-colors')
+    return saved ? JSON.parse(saved) : DEFAULT_PRESET_COLORS
+  })
+  const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | null>(null)
+  const [tooltip, setTooltip] = useState<{ color: string; x: number; y: number } | null>(null)
+
   const gridRef = useRef<HTMLDivElement>(null)
 
-  // Reset grid when settings change
+  // Reset grid when settings change (Zustand handles this)
   useEffect(() => {
     resetGridWithSettings(settings.gridRows, settings.gridCols, settings.defaultCellColor)
   }, [settings.gridRows, settings.gridCols, settings.defaultCellColor, resetGridWithSettings])
 
+  // Save preset colors to localStorage
+  useEffect(() => {
+    localStorage.setItem('preset-colors', JSON.stringify(presetColors))
+  }, [presetColors])
+
+  // Load persisted tool mode
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('pixelgrid-tool-settings')
+    if (savedSettings) {
+      try {
+        const { toolMode: savedTool } = JSON.parse(savedSettings)
+        if (savedTool) setToolMode(savedTool)
+      } catch (e) {
+        console.warn('Failed to load saved tool settings:', e)
+      }
+    }
+  }, [])
+
+  // Persist tool mode
+  useEffect(() => {
+    const toolSettings = { toolMode }
+    localStorage.setItem('pixelgrid-tool-settings', JSON.stringify(toolSettings))
+  }, [toolMode])
+
   const handleCellClick = (row: number, col: number) => {
-    paintCell(row, col, settings.selectedColor)
+    // If eyedropper is active, sample the color instead of painting
+    if (isEyedropperActive) {
+      const sampledColor = grid.present[row][col]
+      setSelectedColor(sampledColor)
+      return
+    }
+
+    let colorToUse: string
+
+    switch (toolMode) {
+      case 'paint':
+        colorToUse = settings.selectedColor
+        break
+      case 'eraser':
+        colorToUse = settings.defaultCellColor
+        break
+      default:
+        colorToUse = settings.selectedColor
+    }
+
+    paintCell(row, col, colorToUse)
+  }
+
+  const handlePresetClick = (presetColor: string, index: number) => {
+    setSelectedColor(presetColor)
+    setSelectedPresetIndex(index)
+  }
+
+  const handleColorPickerChange = (newColor: string) => {
+    setSelectedColor(newColor)
+
+    // If a preset was selected, update that preset slot
+    if (selectedPresetIndex !== null) {
+      const updatedPresets = [...presetColors]
+      updatedPresets[selectedPresetIndex] = newColor
+      setPresetColors(updatedPresets)
+    }
   }
 
   const handleExport = (format: ExportTypes) => {
@@ -50,8 +137,10 @@ const PixelGrid: React.FC<PixelGridProps> = () => {
     const exportOption = exportOptions.find((option) => option.format === format)
     if (!exportOption) return
 
+    const passedData = format === 'json' ? grid : gridRef.current
+
     exportOption
-      .converter(gridRef.current)
+      .converter(passedData as ExportData)
       .then((dataUrl) => {
         const link = document.createElement('a')
         link.download = `pixel-art.${exportOption.format}`
@@ -86,15 +175,53 @@ const PixelGrid: React.FC<PixelGridProps> = () => {
 
         // D = Toggle Dark Mode
         if (event.key === 'd') triggerAction(() => toggleTheme())
+
+        // P = Paint mode
+        if (event.key === 'p') triggerAction(() => setToolMode('paint'))
+
+        // E = Eraser mode
+        if (event.key === 'e') triggerAction(() => setToolMode('eraser'))
+
+        // I = Eyedropper mode (temporary activation)
+        if (event.key === 'i') {
+          event.preventDefault()
+          setIsEyedropperActive(true)
+        }
+      }
+    }
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      // Deactivate eyedropper when I key is released
+      if (event.key === 'i') {
+        setIsEyedropperActive(false)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
   }, [undo, redo, resetGrid, toggleTheme])
+
+  // Get cursor class based on current state
+  const getCursorClass = () => {
+    if (isEyedropperActive) return 'cursor-eyedropper'
+    if (toolMode === 'paint') return 'cursor-crosshair'
+    if (toolMode === 'eraser') return 'cursor-eraser'
+    return 'cursor-crosshair'
+  }
 
   return (
     <div className="bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      {/* Eyedropper tooltip overlay */}
+      {isEyedropperActive && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-3 py-1 rounded-md text-sm z-10">
+          Click a pixel to sample its color
+        </div>
+      )}
+
       {/* Pixel Grid */}
       <div
         ref={gridRef}
@@ -114,60 +241,154 @@ const PixelGrid: React.FC<PixelGridProps> = () => {
               onClick={() => handleCellClick(i, j)}
               onMouseDown={() => handleCellClick(i, j)}
               onMouseEnter={(e) => {
+                setTooltip({ color, x: e.clientX + TOOLTIP_OFFSET, y: e.clientY + TOOLTIP_OFFSET })
+
                 const LEFT_MOUSE = 1
-                if (e.buttons === LEFT_MOUSE) {
+                if (e.buttons === LEFT_MOUSE && !isEyedropperActive) {
                   handleCellClick(i, j)
                 }
+              }}
+              onMouseMove={(e) => {
+                setTooltip({ color, x: e.clientX + TOOLTIP_OFFSET, y: e.clientY + TOOLTIP_OFFSET })
+              }}
+              onMouseLeave={() => {
+                setTooltip(null)
               }}
               style={{
                 backgroundColor: color,
                 width: `${settings.cellSize}px`,
                 height: `${settings.cellSize}px`,
               }}
-              className="cursor-pointer transition-colors select-none"
+              className={clsx('transition-colors select-none', getCursorClass())}
             />
           ))
         )}
       </div>
 
+      {tooltip && <ColorTooltip {...tooltip} />}
+
       {/* Bottom-Left Floating Toolbar */}
-      <div className="absolute bottom-4 left-4 flex gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" onClick={() => undo()} disabled={grid.past.length === 0}>
-              <Undo2 />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Undo</TooltipContent>
-        </Tooltip>
+      <div className="absolute bottom-4 left-4 flex gap-2 flex-col">
+        {/* Tool Selection */}
+        <div className="flex gap-2 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={toolMode === 'paint' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setToolMode('paint')}
+              >
+                <Paintbrush className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Paint Mode (P)</TooltipContent>
+          </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" onClick={() => redo()} disabled={grid.future.length === 0}>
-              <Redo2 />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Redo</TooltipContent>
-        </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={toolMode === 'eraser' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setToolMode('eraser')}
+              >
+                <Eraser className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Eraser Mode - Default Color (E)</TooltipContent>
+          </Tooltip>
+        </div>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" onClick={() => resetGrid()}>
-              <Trash2 />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Clear Canvas</TooltipContent>
-        </Tooltip>
+        {/* Eyedropper Info */}
+        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg">
+          <div className="text-xs text-gray-600 dark:text-gray-300 text-center">
+            Hold <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">I</kbd>{' '}
+            to sample colors
+          </div>
+        </div>
+        {/* Preset Colors Palette */}
+        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg">
+          <div className="grid grid-cols-5 gap-1.5">
+            {presetColors.map((presetColor, index) => (
+              <Tooltip key={index}>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => handlePresetClick(presetColor, index)}
+                    className="size-6 rounded border-2 transition-all hover:scale-110 active:scale-95"
+                    style={{
+                      backgroundColor: presetColor,
+                      borderColor: selectedPresetIndex === index ? '#3b82f6' : '#9ca3af',
+                      boxShadow:
+                        selectedPresetIndex === index
+                          ? '0 0 0 2px rgba(59, 130, 246, 0.3)'
+                          : 'none',
+                    }}
+                    aria-label={`Select color ${presetColor}`}
+                  />
+                </TooltipTrigger>
+                <TooltipContent>{presetColor.toUpperCase()}</TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" onClick={() => undo()} disabled={grid.past.length === 0}>
+                <Undo2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Undo (Ctrl+Z)</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" onClick={() => redo()} disabled={grid.future.length === 0}>
+                <Redo2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Redo (Ctrl+Y)</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" onClick={() => resetGrid()}>
+                <Trash2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Clear Canvas (C)</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {/* Bottom-Center Floating Color Picker */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <ColorPicker color={settings.selectedColor} onChange={setSelectedColor} />
-          </TooltipTrigger>
-          <TooltipContent>Selected Color</TooltipContent>
-        </Tooltip>
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-4">
+        {/* Paint Color */}
+        {toolMode === 'paint' && (
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg">
+            <div className="text-xs text-gray-600 dark:text-gray-300 mb-2 text-center">
+              Paint Color
+            </div>
+            <ColorPicker color={settings.selectedColor} onChange={handleColorPickerChange} />
+          </div>
+        )}
+
+        {/* Eraser Color */}
+        {toolMode === 'eraser' && (
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg">
+            <div className="text-xs text-gray-600 dark:text-gray-300 mb-2 text-center">Eraser</div>
+            <div className="flex items-center gap-2 flex-col">
+              <div
+                className="size-10 border-2 border-gray-300 dark:border-gray-600 rounded cursor-not-allowed flex items-center justify-center"
+                style={{ backgroundColor: settings.defaultCellColor }}
+              >
+                <Eraser className="h-4 w-4 text-gray-600" />
+              </div>
+              <span className="text-sm">{settings.defaultCellColor.toUpperCase()}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bottom-Right Floating Export and Settings */}

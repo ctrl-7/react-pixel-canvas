@@ -3,13 +3,13 @@ import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
   AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogDescription,
   AlertDialogTrigger,
-  AlertDialogFooter,
 } from '@/components/ui/alert-dialog'
-import { Sun, Moon, X as XIcon, Settings, EyeClosed, Eye } from 'lucide-react'
+import { Sun, Moon, X as XIcon, Settings, EyeClosed, Eye, Upload } from 'lucide-react'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useThemeStore } from '@/store/themeStore'
 
@@ -27,6 +27,11 @@ const SettingsDialog: React.FC = () => {
 
   const theme = useThemeStore((state) => state.theme)
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
+
+  // TODO: Implement JSON import with Zustand
+  const handleLoadJSON = () => {
+    alert('JSON import feature coming soon! This needs to be implemented in the Zustand store.')
+  }
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
@@ -123,6 +128,15 @@ const SettingsDialog: React.FC = () => {
                 className="w-20 h-10 border rounded"
               />
             </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span>Load from JSON</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleLoadJSON}>
+              <Upload />
+            </Button>
           </div>
         </div>
 
