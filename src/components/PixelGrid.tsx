@@ -88,6 +88,19 @@ const gridReducer = (state: GridState, action: Action): GridState => {
   }
 }
 
+const DEFAULT_PRESET_COLORS = [
+  '#000000', // Black
+  '#FFFFFF', // White
+  '#FF0000', // Red
+  '#00FF00', // Green
+  '#0000FF', // Blue
+  '#FFFF00', // Yellow
+  '#FF00FF', // Magenta
+  '#00FFFF', // Cyan
+  '#FFA500', // Orange
+  '#800080', // Purple
+]
+
 const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAULT_GRID }) => {
   const [selectedColor, setSelectedColor] = useState('#000000')
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
@@ -98,6 +111,12 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
   const [gridCols, setGridCols] = useState(cols)
   const [cellSize, setCellSize] = useState(32)
   const [defaultCellColor, setDefaultCellColor] = useState('#ffffff')
+
+  const [presetColors, setPresetColors] = useState<string[]>(() => {
+    const saved = localStorage.getItem('preset-colors')
+    return saved ? JSON.parse(saved) : DEFAULT_PRESET_COLORS
+  })
+  const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | null>(null)
 
   const [state, dispatch] = useReducer(gridReducer, {
     past: [],
@@ -136,6 +155,11 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
     localStorage.setItem('pixelgrid-settings', JSON.stringify(settings))
   }, [selectedColor, toolMode])
 
+  // Save preset colors to localStorage
+  useEffect(() => {
+    localStorage.setItem('preset-colors', JSON.stringify(presetColors))
+  }, [presetColors])
+
   // Load persisted settings
   useEffect(() => {
     const savedSettings = localStorage.getItem('pixelgrid-settings')
@@ -165,6 +189,22 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
     }
 
     dispatch({ type: 'PAINT', row, col, color: colorToUse })
+  }
+
+  const handlePresetClick = (presetColor: string, index: number) => {
+    setSelectedColor(presetColor)
+    setSelectedPresetIndex(index)
+  }
+
+  const handleColorPickerChange = (newColor: string) => {
+    setSelectedColor(newColor)
+
+    // If a preset was selected, update that preset slot
+    if (selectedPresetIndex !== null) {
+      const updatedPresets = [...presetColors]
+      updatedPresets[selectedPresetIndex] = newColor
+      setPresetColors(updatedPresets)
+    }
   }
 
   const handleExport = (format: ExportTypes) => {
@@ -301,6 +341,32 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
           </Tooltip>
         </div>
 
+        {/* Preset Colors Palette */}
+        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg">
+          <div className="grid grid-cols-5 gap-1.5">
+            {presetColors.map((presetColor, index) => (
+              <Tooltip key={index}>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => handlePresetClick(presetColor, index)}
+                    className="size-6 rounded border-2 transition-all hover:scale-110 active:scale-95"
+                    style={{
+                      backgroundColor: presetColor,
+                      borderColor: selectedPresetIndex === index ? '#3b82f6' : '#9ca3af',
+                      boxShadow:
+                        selectedPresetIndex === index
+                          ? '0 0 0 2px rgba(59, 130, 246, 0.3)'
+                          : 'none',
+                    }}
+                    aria-label={`Select color ${presetColor}`}
+                  />
+                </TooltipTrigger>
+                <TooltipContent>{presetColor.toUpperCase()}</TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex gap-2">
           <Tooltip>
@@ -348,12 +414,7 @@ const PixelGrid: React.FC<PixelGridProps> = ({ rows = DEFAULT_GRID, cols = DEFAU
             <div className="text-xs text-gray-600 dark:text-gray-300 mb-2 text-center">
               Paint Color
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <ColorPicker color={selectedColor} onChange={setSelectedColor} />
-              </TooltipTrigger>
-              <TooltipContent>Paint Color</TooltipContent>
-            </Tooltip>
+            <ColorPicker color={selectedColor} onChange={handleColorPickerChange} />
           </div>
         )}
 
